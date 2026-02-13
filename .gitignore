@@ -179,3 +179,18 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# --- Vigilance-PK Custom Ignores ---
+
+# Ignore all raw and processed news data
+data/
+*.csv
+*.json
+
+# Ignore local AI database (ChromaDB)
+news_db/
+
+# Ignore Python environment and cache
+__pycache__/
+.env
+venv/
