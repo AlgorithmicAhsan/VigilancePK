@@ -12,7 +12,8 @@ class UrduProcessor:
         
         # 2. Build the pipeline
         # We use tokenize (normalization), lemma (roots), and pos (parts of speech)
-        self.nlp = stanza.Pipeline('ur', processors='tokenize,lemma,pos', use_gpu=True, logging_level='WARN')
+        # Initialize the pipeline for Urdu with GPU disabled to save VRAM for the LLM
+        self.nlp = stanza.Pipeline('ur', processors='tokenize,lemma,pos', use_gpu=False, logging_level='WARN')
 
     def is_urdu(self, text):
         """Detects if text contains Urdu/Arabic script characters."""
