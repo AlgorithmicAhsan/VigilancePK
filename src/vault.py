@@ -18,8 +18,8 @@ class Vault:
         self.client = chromadb.PersistentClient(path=db_path)
         
         # Initialize Embedding Model
-        print(f"Loading embedding model: {model_name}...")
-        self.model = SentenceTransformer(model_name)
+        print("Loading multilingual embedding model: paraphrase-multilingual-MiniLM-L12-v2...")
+        self.model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
         
         # Create or Get Collection
         self.collection = self.client.get_or_create_collection(

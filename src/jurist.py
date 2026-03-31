@@ -137,5 +137,5 @@ class Jurist:
 if __name__ == "__main__":
     # Milestone Execution: Phase 3
     # Ensure you have the model pulled: ollama pull llama3.1:8b
-    jurist = Jurist(model="llama3.1:8b")
-    jurist.process_all(max_workers=4) # Concurrency level 2 for 12GB VRAM stability
+    jurist = Jurist(model="qwen2.5:3b")
+    jurist.process_all(max_workers=4) # Concurrency level 4 for 12GB VRAM stability

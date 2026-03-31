@@ -2,7 +2,7 @@ import feedparser
 import json
 from datetime import datetime
 from tqdm import tqdm
-from nlp_engine import UrduProcessor
+from src.nlp_engine import UrduProcessor
 
 class NewsScraper:
     def __init__(self):
@@ -52,7 +52,7 @@ class NewsScraper:
         ]
         
         for article in self.data:
-            # If it's Urdu, we keep it for now (safe bet for HRCP triage)
+            # If it's Urdu, we keep it for now
             if article.get('language') == 'urdu':
                 self.filtered_data.append(article)
                 continue
