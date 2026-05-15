@@ -2,10 +2,15 @@ import json
 import os
 import concurrent.futures
 from tqdm import tqdm
-import ollama
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 class Jurist:
-    def __init__(self, model="llama3.1:8b"):
+    def __init__(self, model="gemini-flash-latest"):
         self.model = model
         # Full HRCP Taxonomy (Simplified for prompt efficiency)
         self.taxonomy = {
@@ -56,8 +61,12 @@ class Jurist:
 
         try:
             # First LLM call
-            res1 = ollama.generate(model=self.model, prompt=pass1_prompt, format='json')
-            major_cats = json.loads(res1['response']).get('major_categories', [])
+            model = genai.GenerativeModel(self.model)
+            res1 = model.generate_content(
+                pass1_prompt,
+                generation_config={"response_mime_type": "application/json"}
+            )
+            major_cats = json.loads(res1.text).get('major_categories', [])
             
             # --- PASS 2: Surgical Tagging ---
             # Filter taxonomy to only show relevant sub-tags
@@ -84,8 +93,11 @@ class Jurist:
             """
 
             # Second LLM call
-            res2 = ollama.generate(model=self.model, prompt=pass2_prompt, format='json')
-            specific_tags = json.loads(res2['response']).get('specific_tags', [])
+            res2 = model.generate_content(
+                pass2_prompt,
+                generation_config={"response_mime_type": "application/json"}
+            )
+            specific_tags = json.loads(res2.text).get('specific_tags', [])
 
             # Post-processing: Remove redundant Major Category names from the tags
             clean_tags = [t for t in specific_tags if t not in major_cats]
@@ -137,5 +149,5 @@ class Jurist:
 if __name__ == "__main__":
     # Milestone Execution: Phase 3
     # Ensure you have the model pulled: ollama pull llama3.1:8b
-    jurist = Jurist(model="qwen2.5:3b")
-    jurist.process_all(max_workers=4) # Concurrency level 4 for 12GB VRAM stability
+    jurist = Jurist(model="gemini-flash-latest")
+    jurist.process_all(max_workers=2) # Lower concurrency for free tier stability

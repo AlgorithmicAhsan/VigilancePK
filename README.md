@@ -1,6 +1,6 @@
 # 🛡️ Vigilance-PK Pro: Elite Multilingual Human Rights Triage
 
-**Vigilance-PK Pro** is a state-of-the-art OSINT (Open Source Intelligence) platform designed for the automated triage and analysis of human rights violations in Pakistan. It leverages a decoupled architecture to process multilingual news feeds (Urdu and English), categorize them using local LLMs (Llama 3.1 8B), and provide a cinematic, real-time RAG (Retrieval-Augmented Generation) dashboard.
+**Vigilance-PK Pro** is an OSINT (Open Source Intelligence) platform designed for the automated triage and analysis of human rights violations in Pakistan. It leverages a decoupled architecture to process multilingual news feeds (Urdu and English), categorize them using LLMs, and provide a real-time RAG (Retrieval-Augmented Generation) dashboard.
 
 ---
 
@@ -18,7 +18,7 @@ graph TD
 
     subgraph Intelligence_Phase [2. Jurist Phase: AI Triage]
         D --> E[Jurist Classifier]
-        E --> F[Llama 3.1 8B: Local Ollama]
+        E --> F[Google Gemini Flash API]
         F --> G[Categorized & Tagged Intel]
     end
 
@@ -45,9 +45,9 @@ graph TD
 *   **Universal Translator**: Automated pre-processing of Urdu context for the LLM judge during evaluations.
 
 ### 🧠 Advanced AI Triage (The Jurist)
-*   **Llama 3.1 8B Integration**: Local execution for privacy and high-speed classification.
+*   **Gemini Flash API**: High-speed, high-token-count cloud inference for complex reasoning and synthesis.
 *   **Two-Tier Taxonomy**: Automated mapping of reports to HRCP (Human Rights Commission of Pakistan) categories.
-*   **Grounding Analyst Prompting**: Hardened system prompts to eliminate "As an AI model" fallbacks and ensure evidence-based reporting.
+*   **Grounded Analyst Prompting**: Hardened system prompts and zero-temperature configurations to eliminate hallucinations and ensure evidence-based reporting.
 
 ### 📊 Elite Analytical Dashboard
 *   **Real-time Streaming**: RAG responses delivered via Server-Sent Events (SSE).
@@ -63,7 +63,7 @@ graph TD
 | **Backend** | Python 3.11, FastAPI, Uvicorn |
 | **Frontend** | Next.js 15 (App Router), Tailwind CSS, Framer Motion |
 | **NLP** | Stanza (Urdu/English), Sentence-Transformers |
-| **LLM** | Ollama (Llama 3.1 8B), Qwen 2.5 3B (Auditor) |
+| **LLM** | Google Gemini (Flash 1.5/2.0) |
 | **Database** | ChromaDB (Vector Database) |
 | **Evaluation** | DeepEval (RAG Faithfulness & Relevancy) |
 
@@ -74,17 +74,16 @@ graph TD
 ### 1. Prerequisites
 - Python 3.11+
 - Node.js 18+
-- [Ollama](https://ollama.com/) installed and running.
-- Pull required models:
-  ```bash
-  ollama pull llama3.1:8b
-  ollama pull qwen2.5:3b
-  ```
+- Google Gemini API Key (obtain from [Google AI Studio](https://aistudio.google.com/))
 
 ### 2. Backend Setup
 ```bash
 # Install dependencies
 pip install -r requirements.txt
+
+# Configure Environment
+cp .env.example .env
+# Edit .env and add your GOOGLE_API_KEY
 
 # Start the Intelligence API
 uvicorn src.api:app --reload --port 8000
@@ -109,5 +108,3 @@ deepeval test run tests/test_eval_rag.py
 Vigilance-PK is built to support human rights defenders. The system operates entirely locally (No data sent to external APIs), ensuring the highest level of security for sensitive intelligence logs.
 
 ---
-
-**Developed for the Human Rights Commission of Pakistan (HRCP) / OSINT Community.**

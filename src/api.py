@@ -3,7 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import json
 import asyncio
-import ollama
+import os
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+# Load environment variables at the very beginning
+load_dotenv()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
 from src.vault import Vault
 from src.scout import NewsScraper
 from src.jurist import Jurist
@@ -42,12 +49,11 @@ async def get_feed(limit: int = 15):
 def translate_to_urdu_keywords(query: str):
     """Uses the LLM to generate Urdu keywords for a query to improve retrieval."""
     try:
-        resp = ollama.generate(
-            model="llama3.1:8b", 
-            prompt=f"Translate the core human rights keywords of this request to Urdu. Only output the Urdu keywords separated by commas: {query}"
-        )
-        return resp['response']
-    except:
+        model = genai.GenerativeModel("gemini-flash-latest")
+        resp = model.generate_content(f"Translate the core human rights keywords of this request to Urdu. Only output the Urdu keywords separated by commas: {query}")
+        return resp.text
+    except Exception as e:
+        print(f"Translation Error: {e}")
         return ""
 
 @app.post("/chat")
@@ -80,24 +86,29 @@ async def chat_endpoint(request: Request):
         yield json.dumps({"type": "sources", "data": sources}) + "\n"
         
         system_prompt = (
-            "### INSTRUCTION ###\n"
-            "You are an Elite Intelligence Analyst for Vigilance-PK. Your output must be a professional synthesis of the Research Notes below. "
-            "IMPORTANT: Many of your most critical reports are in Urdu. You MUST translate and incorporate EVERY relevant detail from those Urdu reports (like Trump's war stance or Ambassador statements) into your English response. "
-            "STRICT RULES:\n"
-            "1. NEVER give generic AI refusals or mention data cut-offs.\n"
-            "2. If you see news about War, Diplomacy, or Ceasefires in the notes, report it as a priority.\n"
-            "3. Cite your sources specifically by name (e.g., 'Per Jang...' or 'BBC Urdu reports...').\n"
-            "4. If multiple sources conflict or add layers, synthesize them into a cohesive narrative.\n\n"
+            "### IDENTITY ###\n"
+            "You are an Elite Intelligence Analyst for Vigilance-PK. Your purpose is to provide objective, grounded reports based ONLY on the provided Research Notes.\n\n"
+            "### STRICT GROUNDING RULES ###\n"
+            "1. USE ONLY the provided Research Notes. If the information is not present, state: 'I do not have specific data on this topic in the current intelligence repository.'\n"
+            "2. NEVER invent details, dates, or names not found in the notes.\n"
+            "3. CITE YOUR SOURCES. Every factual claim must be attributed (e.g., 'Per Jang...', 'Express Urdu reports...').\n"
+            "4. SYNTHESIZE MULTILINGUAL DATA. Incorporate details from Urdu reports into your English response accurately.\n"
+            "5. NO EXTERNAL KNOWLEDGE. Do not use your internal training data to supplement the report unless it is for general context (e.g., explaining what an FIR is).\n\n"
             f"### RESEARCH NOTES ###\n{context}"
         )
-        stream = ollama.chat(model="llama3.1:8b", messages=[
-            {'role':'system','content':system_prompt},
-            {'role':'user','content':user_query}
-        ], stream=True)
+        model = genai.GenerativeModel(
+            model_name="gemini-flash-latest",
+            system_instruction=system_prompt
+        )
+        response = model.generate_content(
+            user_query, 
+            stream=True,
+            generation_config={"temperature": 0.0} # Maximum grounding
+        )
         
-        for chunk in stream:
-            content = chunk['message']['content']
-            yield json.dumps({"type": "content", "data": content}) + "\n"
+        for chunk in response:
+            if chunk.text:
+                yield json.dumps({"type": "content", "data": chunk.text}) + "\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -111,8 +122,8 @@ async def sync_pipeline():
     scraper.filter_articles()
     scraper.save_to_file("data/filtered_news.json")
     
-    jurist = Jurist(model="llama3.1:8b")
-    jurist.process_all(input_file="data/filtered_news.json", output_file="data/categorized_news.json", max_workers=1)
+    jurist = Jurist(model="gemini-flash-latest")
+    jurist.process_all(input_file="data/filtered_news.json", output_file="data/categorized_news.json", max_workers=2)
     
     vault.ingest_json("data/categorized_news.json")
     return {"status": "success", "message": "Pipeline synchronized."}

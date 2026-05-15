@@ -132,6 +132,21 @@ celerybeat.pid
 .venv
 env/
 venv/
+.venv/
+.DS_Store
+
+# Scratch and check scripts
+scratch/
+
+# Next.js / Node
+web/.next/
+web/node_modules/
+web/.env*
+web/out/
+web/build/
+
+# ChromaDB
+data/chroma_db/
 ENV/
 env.bak/
 venv.bak/
