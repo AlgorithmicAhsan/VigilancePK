@@ -3,14 +3,16 @@ import os
 import concurrent.futures
 from tqdm import tqdm
 import google.generativeai as genai
+import ollama
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+if os.getenv("GOOGLE_API_KEY"):
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 class Jurist:
-    def __init__(self, model="gemini-flash-latest"):
+    def __init__(self, model="qwen3:4b"):
         self.model = model
         # Full HRCP Taxonomy (Simplified for prompt efficiency)
         self.taxonomy = {
@@ -37,84 +39,88 @@ class Jurist:
         }
 
     def categorize_article(self, article):
-        """Classifies a single article using a high-precision two-pass logic."""
+        """Classifies an article in a single high-precision pass with reasoning."""
         text = f"Title: {article.get('title', '')}\nSummary: {article.get('summary', '')}"
         
-        # --- PASS 1: Select Broad Categories ---
-        pass1_prompt = f"""
-        Identify the 1-3 most relevant Major Categories for this Pakistani news article.
-        
+        system_instruction = (
+            "You are an expert Human Rights Analyst specializing in the Pakistani context. "
+            "Your task is to categorize news articles according to the HRCP (Human Rights Commission of Pakistan) taxonomy. "
+            "STRICT RULES:\n"
+            "1. Output valid JSON only.\n"
+            "2. If an article is purely international or purely economic with no human rights angle, use 'General News' as the category.\n"
+            "3. Be specific. If you pick a major category, you MUST pick relevant sub-tags."
+        )
+
+        prompt = f"""
+        Analyze this article and identify:
+        1. 1-3 Major Categories from the taxonomy below.
+        2. 1-5 Specific Sub-Tags from the associated lists.
+
         ARTICLE:
         {text}
-        
-        AVAILABLE MAJOR CATEGORIES:
-        {list(self.taxonomy.keys())}
-        
-        EXAMPLES:
-        - "Court stays execution": ["Judicial System", "Crimes & Violations"]
-        - "Rupee drops against dollar": ["Economy"]
-        - "Digital census starts in Karachi": ["Governance"]
 
-        OUTPUT FORMAT (JSON):
-        {{"major_categories": ["..."]}}
+        TAXONOMY:
+        {json.dumps(self.taxonomy, indent=2)}
+
+        OUTPUT FORMAT:
+        {{
+            "reasoning": "brief explanation of why these categories apply",
+            "major_categories": ["Category 1", "Category 2"],
+            "specific_tags": ["Tag A", "Tag B"]
+        }}
         """
 
         try:
-            # First LLM call
-            model = genai.GenerativeModel(self.model)
-            res1 = model.generate_content(
-                pass1_prompt,
-                generation_config={"response_mime_type": "application/json"}
-            )
-            major_cats = json.loads(res1.text).get('major_categories', [])
+            # Detect Model Type
+            if "gemini" in self.model.lower():
+                # --- GEMINI API PATH ---
+                model = genai.GenerativeModel(
+                    model_name=self.model,
+                    system_instruction=system_instruction
+                )
+                response = model.generate_content(
+                    prompt,
+                    generation_config={
+                        "response_mime_type": "application/json",
+                        "temperature": 0.1
+                    }
+                )
+                result = json.loads(response.text)
+            else:
+                # --- OLLAMA LOCAL PATH ---
+                # Combine system instruction and prompt for Ollama
+                ollama_prompt = f"{system_instruction}\n\n{prompt}"
+                response = ollama.generate(
+                    model=self.model,
+                    prompt=ollama_prompt,
+                    format='json',
+                    options={"temperature": 0.1}
+                )
+                result = json.loads(response['response'])
             
-            # --- PASS 2: Surgical Tagging ---
-            # Filter taxonomy to only show relevant sub-tags
-            filtered_taxonomy = {cat: self.taxonomy[cat] for cat in major_cats if cat in self.taxonomy}
-            if not filtered_taxonomy:
-                filtered_taxonomy = {"Other": ["General News"]}
+            major_cats = result.get('major_categories', [])
+            specific_tags = result.get('specific_tags', [])
 
-            pass2_prompt = f"""
-            Identify 1-3 Specific Sub-Tags from the lists of the selected Categories.
+            # Ensure we have at least one category if empty
+            if not major_cats:
+                major_cats = ["General News"]
             
-            ARTICLE:
-            {text}
-            
-            SELECTED CATEGORIES & THEIR TAGS:
-            {json.dumps(filtered_taxonomy, indent=2)}
-            
-            INSTRUCTIONS:
-            1. Only pick tags from the lists provided.
-            2. CRITICAL: Do NOT pick the Category Name itself (e.g., if Category is 'Economy', do NOT pick 'Economy' as a tag—pick 'Inflation' or 'Poverty').
-            3. Do NOT pick 'Suicide attacks' or 'Terrorism' unless the text explicitly mentions them.
-
-            OUTPUT FORMAT (JSON):
-            {{"specific_tags": ["..."]}}
-            """
-
-            # Second LLM call
-            res2 = model.generate_content(
-                pass2_prompt,
-                generation_config={"response_mime_type": "application/json"}
-            )
-            specific_tags = json.loads(res2.text).get('specific_tags', [])
-
-            # Post-processing: Remove redundant Major Category names from the tags
-            clean_tags = [t for t in specific_tags if t not in major_cats]
-            
-            # Fallback if list is empty after cleaning
-            if not clean_tags and specific_tags:
-                clean_tags = specific_tags
-
             article['jurist_classification'] = {
                 "major_categories": major_cats,
-                "specific_tags": clean_tags
+                "specific_tags": specific_tags,
+                "reasoning": result.get('reasoning', '')
             }
             return article
 
         except Exception as e:
-            article['jurist_classification'] = {"error": f"Precision Fail: {str(e)}"}
+            print(f"Classification Error: {e}")
+            article['jurist_classification'] = {
+                "major_categories": ["Uncategorized"],
+                "specific_tags": [],
+                "error": str(e)
+            }
             return article
+
 
     def process_all(self, input_file=None, output_file=None, max_workers=2):
         """Processes articles in parallel for maximum speed."""

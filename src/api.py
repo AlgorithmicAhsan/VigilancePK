@@ -5,11 +5,15 @@ import json
 import asyncio
 import os
 import google.generativeai as genai
+import ollama
 from dotenv import load_dotenv
 
+
+chat_model="qwen3:4b"
 # Load environment variables at the very beginning
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+if os.getenv("GOOGLE_API_KEY"):
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 from src.vault import Vault
 from src.scout import NewsScraper
@@ -20,7 +24,7 @@ app = FastAPI(title="Vigilance-PK Intel API")
 # --- Enable CORS for Next.js ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],  # Broaden for development stability
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,12 +50,18 @@ async def get_feed(limit: int = 15):
     except Exception as e:
         return {"error": str(e)}
 
-def translate_to_urdu_keywords(query: str):
+def translate_to_urdu_keywords(query: str, model_name=chat_model):
     """Uses the LLM to generate Urdu keywords for a query to improve retrieval."""
     try:
-        model = genai.GenerativeModel("gemini-flash-latest")
-        resp = model.generate_content(f"Translate the core human rights keywords of this request to Urdu. Only output the Urdu keywords separated by commas: {query}")
-        return resp.text
+        prompt = f"Translate the core human rights keywords of this request to Urdu. Only output the Urdu keywords separated by commas: {query}"
+        
+        if "gemini" in model_name.lower():
+            model = genai.GenerativeModel("gemini-flash-latest")
+            resp = model.generate_content(prompt)
+            return resp.text
+        else:
+            resp = ollama.generate(model=model_name, prompt=prompt)
+            return resp['response']
     except Exception as e:
         print(f"Translation Error: {e}")
         return ""
@@ -61,29 +71,36 @@ async def chat_endpoint(request: Request):
     """RAG Chat with Streaming Response & Multilingual Search."""
     data = await request.json()
     user_query = data.get("query", "")
-    
-    # 1. Bilingual Search (English + Urdu Keywords)
-    urdu_keywords = translate_to_urdu_keywords(user_query)
-    search_query = f"{user_query} {urdu_keywords}"
-    
-    search = vault.search_news(search_query, top_k=10)
-    
-    # 2. Retrieval & Context Formatting
-    context = "\n\n".join([f"SOURCE [{search['metadatas'][0][i]['source']}]: {d}" for i, d in enumerate(search['documents'][0])])
-    
-    # 3. Format Context for UI
-    sources = []
-    for i, meta in enumerate(search['metadatas'][0]):
-        sources.append({
-            "source": meta['source'], 
-            "title": search['documents'][0][i].splitlines()[0], 
-            "link": meta['link']
-        })
 
     # 4. Stream Generator
     async def generate():
-        # First send the context info as a special JSON chunk
+        # Immediately notify the UI that we are working
+        yield json.dumps({"type": "status", "data": "Initializing Analytical Engine..."}) + "\n"
+        await asyncio.sleep(0.1) # Force flush
+        
+        # 1. Bilingual Search (English + Urdu Keywords) - Done inside the stream
+        yield json.dumps({"type": "status", "data": "Translating for Multilingual Search..."}) + "\n"
+        urdu_keywords = translate_to_urdu_keywords(user_query)
+        search_query = f"{user_query} {urdu_keywords}"
+        
+        yield json.dumps({"type": "status", "data": "Searching Intelligence Repository..."}) + "\n"
+        search = vault.search_news(search_query, top_k=10)
+        
+        # 2. Retrieval & Context Formatting
+        context = "\n\n".join([f"SOURCE [{search['metadatas'][0][i]['source']}]: {d}" for i, d in enumerate(search['documents'][0])])
+        
+        # 3. Format Context for UI
+        sources = []
+        for i, meta in enumerate(search['metadatas'][0]):
+            sources.append({
+                "source": meta['source'], 
+                "title": search['documents'][0][i].splitlines()[0], 
+                "link": meta['link']
+            })
+
+        # Send the context info as a special JSON chunk
         yield json.dumps({"type": "sources", "data": sources}) + "\n"
+        yield json.dumps({"type": "status", "data": "Generating Inference..."}) + "\n"
         
         system_prompt = (
             "### IDENTITY ###\n"
@@ -96,19 +113,34 @@ async def chat_endpoint(request: Request):
             "5. NO EXTERNAL KNOWLEDGE. Do not use your internal training data to supplement the report unless it is for general context (e.g., explaining what an FIR is).\n\n"
             f"### RESEARCH NOTES ###\n{context}"
         )
-        model = genai.GenerativeModel(
-            model_name="gemini-flash-latest",
-            system_instruction=system_prompt
-        )
-        response = model.generate_content(
-            user_query, 
-            stream=True,
-            generation_config={"temperature": 0.0} # Maximum grounding
-        )
-        
-        for chunk in response:
-            if chunk.text:
-                yield json.dumps({"type": "content", "data": chunk.text}) + "\n"
+        if "gemini" in chat_model.lower():
+            # --- GEMINI PATH ---
+            model = genai.GenerativeModel(
+                model_name=chat_model,
+                system_instruction=system_prompt
+            )
+            response = model.generate_content(
+                user_query, 
+                stream=True,
+                generation_config={"temperature": 0.0}
+            )
+            for chunk in response:
+                if chunk.text:
+                    yield json.dumps({"type": "content", "data": chunk.text}) + "\n"
+        else:
+            # --- OLLAMA PATH ---
+            stream = ollama.chat(
+                model=chat_model, 
+                messages=[
+                    {'role':'system','content':system_prompt},
+                    {'role':'user','content':user_query}
+                ], 
+                stream=True,
+                options={"temperature": 0.0}
+            )
+            for chunk in stream:
+                content = chunk['message']['content']
+                yield json.dumps({"type": "content", "data": content}) + "\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -122,7 +154,7 @@ async def sync_pipeline():
     scraper.filter_articles()
     scraper.save_to_file("data/filtered_news.json")
     
-    jurist = Jurist(model="gemini-flash-latest")
+    jurist = Jurist(model=chat_model)
     jurist.process_all(input_file="data/filtered_news.json", output_file="data/categorized_news.json", max_workers=2)
     
     vault.ingest_json("data/categorized_news.json")
