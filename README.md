@@ -30,7 +30,7 @@ graph TD
 
     subgraph Presentation_Phase [4. Nexus Phase: RAG & UI]
         J --> K[FastAPI Backend]
-        K --> L[Next.js Elite Dashboard]
+        K --> L[Featherweight Lite Dashboard]
         L --> M[Bilingual RAG Chat]
     end
 ```
@@ -45,14 +45,14 @@ graph TD
 *   **Universal Translator**: Automated pre-processing of Urdu context for the LLM judge during evaluations.
 
 ### 🧠 Advanced AI Triage (The Jurist)
-*   **Gemini Flash API**: High-speed, high-token-count cloud inference for complex reasoning and synthesis.
+*   **Gemini Flash API / Ollama**: Hybrid inference support for both cloud (Gemini) and local (Qwen/Llama) models.
 *   **Two-Tier Taxonomy**: Automated mapping of reports to HRCP (Human Rights Commission of Pakistan) categories.
-*   **Grounded Analyst Prompting**: Hardened system prompts and zero-temperature configurations to eliminate hallucinations and ensure evidence-based reporting.
+*   **Grounded Analyst Prompting**: Hardened system prompts and zero-temperature configurations to eliminate hallucinations.
 
-### 📊 Elite Analytical Dashboard
-*   **Real-time Streaming**: RAG responses delivered via Server-Sent Events (SSE).
+### 📊 Featherweight Analytical Dashboard
+*   **Zero-Dependency UI**: A high-performance dashboard built with Vanilla HTML/JS and Tailwind CSS. No `node_modules` required.
+*   **Real-time Streaming**: RAG responses delivered via Server-Sent Events (SSE) with live internal status updates.
 *   **Source Citation**: Every claim is linked back to the original verified news source (BBC, Dawn, Jang, etc.).
-*   **Fixed Dashboard Layout**: Independent scrolling for the Intel Feed and Command Hub to ensure maximum accessibility.
 
 ---
 
@@ -61,9 +61,9 @@ graph TD
 | Layer | Technology |
 | :--- | :--- |
 | **Backend** | Python 3.11, FastAPI, Uvicorn |
-| **Frontend** | Next.js 15 (App Router), Tailwind CSS, Framer Motion |
+| **Frontend** | Vanilla HTML5, Tailwind CSS (CDN), Lucide Icons |
 | **NLP** | Stanza (Urdu/English), Sentence-Transformers |
-| **LLM** | Google Gemini (Flash 1.5/2.0) |
+| **LLM** | Google Gemini (Flash 1.5/2.0), Ollama (Qwen2.5/Llama3) |
 | **Database** | ChromaDB (Vector Database) |
 | **Evaluation** | DeepEval (RAG Faithfulness & Relevancy) |
 
@@ -73,27 +73,25 @@ graph TD
 
 ### 1. Prerequisites
 - Python 3.11+
-- Node.js 18+
-- Google Gemini API Key (obtain from [Google AI Studio](https://aistudio.google.com/))
+- Google Gemini API Key (Optional, for cloud-based inference)
 
-### 2. Backend Setup
+### 2. Environment Setup
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
 # Configure Environment
 cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY
-
-# Start the Intelligence API
-uvicorn src.api:app --reload --port 8000
+# Edit .env and add your GOOGLE_API_KEY or select your OLLAMA_MODEL
 ```
 
-### 3. Frontend Setup
+### 3. Execution
 ```bash
-cd web
-npm install
-npm run dev
+# Start the Intelligence API
+uvicorn src.api:app --reload --port 8000
+
+# Open the Dashboard
+# Simply open 'lite-web/index.html' in any modern web browser.
 ```
 
 ### 4. Intelligence Audit
@@ -105,6 +103,6 @@ deepeval test run tests/test_eval_rag.py
 ---
 
 ## 🛡️ Ethics & Compliance
-Vigilance-PK is built to support human rights defenders. The system operates entirely locally (No data sent to external APIs), ensuring the highest level of security for sensitive intelligence logs.
+Vigilance-PK is built to support human rights defenders. The system prioritizes local processing and data sovereignty to ensure the highest level of security for sensitive intelligence logs.
 
 ---
