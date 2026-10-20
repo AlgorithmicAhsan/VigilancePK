@@ -1,9 +1,9 @@
 import json
 import os
+import re
 import concurrent.futures
 from tqdm import tqdm
 import google.generativeai as genai
-import ollama
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -11,9 +11,13 @@ load_dotenv()
 if os.getenv("GOOGLE_API_KEY"):
     genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
+# Same setting the API uses, so the classifier model is named in one place.
+DEFAULT_CLASSIFY_MODEL = os.getenv("CLASSIFY_MODEL", "models/gemini-2.5-flash")
+
+
 class Jurist:
-    def __init__(self, model="qwen3:4b"):
-        self.model = model
+    def __init__(self, model=None):
+        self.model = model or DEFAULT_CLASSIFY_MODEL
         # Full HRCP Taxonomy (Simplified for prompt efficiency)
         self.taxonomy = {
             "Civil Rights": ["Freedom of expression", "Freedom of Peaceful assembly", "Freedom of association", "Freedom of movement", "Digital Rights", "Due process and fair trial"],
@@ -55,6 +59,7 @@ class Jurist:
         Analyze this article and identify:
         1. 1-3 Major Categories from the taxonomy below.
         2. 1-5 Specific Sub-Tags from the associated lists.
+        3. A one-sentence reasoning for the classification.
 
         ARTICLE:
         {text}
@@ -62,42 +67,45 @@ class Jurist:
         TAXONOMY:
         {json.dumps(self.taxonomy, indent=2)}
 
-        OUTPUT FORMAT:
+        OUTPUT FORMAT (JSON ONLY):
         {{
-            "reasoning": "brief explanation of why these categories apply",
-            "major_categories": ["Category 1", "Category 2"],
-            "specific_tags": ["Tag A", "Tag B"]
+            "major_categories": ["Category 1"],
+            "specific_tags": ["Tag A"],
+            "reasoning": "Brief justification grounded in the article text."
         }}
         """
 
         try:
-            # Detect Model Type
-            if "gemini" in self.model.lower():
-                # --- GEMINI API PATH ---
-                model = genai.GenerativeModel(
-                    model_name=self.model,
-                    system_instruction=system_instruction
-                )
-                response = model.generate_content(
-                    prompt,
-                    generation_config={
-                        "response_mime_type": "application/json",
-                        "temperature": 0.1
-                    }
-                )
-                result = json.loads(response.text)
-            else:
-                # --- OLLAMA LOCAL PATH ---
-                # Combine system instruction and prompt for Ollama
-                ollama_prompt = f"{system_instruction}\n\n{prompt}"
-                response = ollama.generate(
-                    model=self.model,
-                    prompt=ollama_prompt,
-                    format='json',
-                    options={"temperature": 0.1}
-                )
-                result = json.loads(response['response'])
+            model = genai.GenerativeModel(
+                model_name=self.model,
+                system_instruction=system_instruction
+            )
+            response = model.generate_content(
+                prompt,
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "temperature": 0.1
+                }
+            )
+            raw_response = response.text
+
+            if not raw_response.strip():
+                print(f"DEBUG: Empty response from model {self.model}")
+                raise ValueError("Model returned an empty response.")
+
+            # Clean Markdown wrappers if the AI included them.
+            # Take what sits between the first fence pair; the old second
+            # split() was a no-op because the delimiter was already consumed.
+            fence = re.search(r"```(?:json)?\s*(.*?)```", raw_response, flags=re.DOTALL)
+            if fence:
+                raw_response = fence.group(1).strip()
             
+            try:
+                result = json.loads(raw_response)
+            except json.JSONDecodeError:
+                print(f"DEBUG: Failed to parse JSON. Raw start: {raw_response[:100]}...")
+                raise
+
             major_cats = result.get('major_categories', [])
             specific_tags = result.get('specific_tags', [])
 
@@ -114,11 +122,7 @@ class Jurist:
 
         except Exception as e:
             print(f"Classification Error: {e}")
-            article['jurist_classification'] = {
-                "major_categories": ["Uncategorized"],
-                "specific_tags": [],
-                "error": str(e)
-            }
+            article['jurist_classification'] = {"major_categories": ["Uncategorized"], "specific_tags": [], "error": str(e)}
             return article
 
 
@@ -154,6 +158,7 @@ class Jurist:
 
 if __name__ == "__main__":
     # Milestone Execution: Phase 3
-    # Ensure you have the model pulled: ollama pull llama3.1:8b
-    jurist = Jurist(model="gemini-flash-latest")
+    # Model comes from CLASSIFY_MODEL in .env.
+    jurist = Jurist()
+    print(f"Classifying with: {jurist.model}")
     jurist.process_all(max_workers=2) # Lower concurrency for free tier stability

@@ -1,8 +1,20 @@
+import email.utils
 import feedparser
 import json
-from datetime import datetime
+import re
+import socket
+from datetime import datetime, timezone
 from tqdm import tqdm
 from src.nlp_engine import UrduProcessor
+
+# Seconds to wait on a single feed before giving up. feedparser has no timeout
+# argument, so we bound it at the socket layer - without this one unresponsive
+# host hangs the whole sync indefinitely.
+FEED_TIMEOUT_SECONDS = 20
+
+# Some publishers reject requests without a recognisable agent string.
+USER_AGENT = "Vigilance-PK/1.0 (+human rights monitoring; RSS reader)"
+
 
 class NewsScraper:
     def __init__(self):
@@ -21,18 +33,58 @@ class NewsScraper:
 
     def fetch_feeds(self):
         """Fetches, parses, and processes all defined RSS feeds."""
+        # Reset so a second call on the same instance does not double-count.
+        self.data = []
+        socket.setdefaulttimeout(FEED_TIMEOUT_SECONDS)
+
         for name, url in self.sources.items():
             print(f"Fetching from {name}...")
-            feed = feedparser.parse(url)
-            
+            try:
+                feed = feedparser.parse(url, agent=USER_AGENT)
+            except Exception as e:
+                print(f"WARNING: could not fetch {name}: {e}")
+                continue
+
+            if getattr(feed, "bozo", False) and not feed.entries:
+                print(f"WARNING: {name} returned no usable entries ({getattr(feed, 'bozo_exception', 'unknown error')}).")
+                continue
+
             for entry in feed.entries:
+                # Normalize published date to a timezone-aware ISO string.
+                # Mixing aware and naive values here breaks the string sort
+                # that /feed relies on, so everything is coerced to UTC.
+                raw_date = entry.get("published", "") or entry.get("updated", "")
+                published_iso = ""
+                if raw_date:
+                    try:
+                        dt = email.utils.parsedate_to_datetime(raw_date)
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        published_iso = dt.astimezone(timezone.utc).isoformat()
+                    except (TypeError, ValueError) as e:
+                        # Leave it empty rather than substituting "now": a
+                        # fabricated timestamp sorts undated items to the top
+                        # of the feed as if they were breaking news.
+                        print(f"DEBUG: unparseable date from {name}: {raw_date!r} ({e})")
+
+                # Try to extract image URL
+                image_url = ""
+                if hasattr(entry, 'media_content') and entry.media_content:
+                    image_url = entry.media_content[0]['url']
+                elif hasattr(entry, 'links'):
+                    for link in entry.links:
+                        if 'image' in link.get('type', ''):
+                            image_url = link.get('href', '')
+                            break
+
                 article = {
                     "source": name,
                     "title": entry.get("title", ""),
                     "link": entry.get("link", ""),
-                    "published": entry.get("published", ""),
+                    "published": published_iso,
                     "summary": entry.get("summary", ""),
-                    "fetched_at": datetime.now().isoformat()
+                    "image": image_url,
+                    "fetched_at": datetime.now(timezone.utc).isoformat()
                 }
                 
                 # Apply Phase 2: NLP Processing (Detection + Normalization)
@@ -41,16 +93,25 @@ class NewsScraper:
         
         print(f"Total articles fetched: {len(self.data)}")
 
+    # Whole-word matching only. Plain substring matching silently discarded
+    # real reports: "score" hit "Scores of protesters killed", "match" hit
+    # "matched", and so on - exactly the headlines this project exists to catch.
+    EXCLUDE_KEYWORDS = [
+        "cricket", "match", "score", "wicket", "t20", "odi",
+        "entertainment", "film", "cinema", "showbiz", "drama", "actor",
+        "weather", "earthquake", "magnitude"
+    ]
+    EXCLUDE_PATTERN = re.compile(
+        r"\b(" + "|".join(re.escape(w) for w in EXCLUDE_KEYWORDS) + r")\b",
+        re.IGNORECASE,
+    )
+
     def filter_articles(self):
         """Pivoting to Keyword exclusion for Ingestion Phase."""
-        # Note: These are English. For now, we keep all Urdu articles 
+        # Note: These are English. For now, we keep all Urdu articles
         # as they require Urdu keywords or LLM classification (Phase 3).
-        exclude_keywords = [
-            "cricket", "match", "score", "wicket", "t20", "odi", 
-            "entertainment", "film", "cinema", "showbiz", "drama", "actor",
-            "weather", "earthquake", "magnitude"
-        ]
-        
+        self.filtered_data = []
+
         for article in self.data:
             # If it's Urdu, we keep it for now
             if article.get('language') == 'urdu':
@@ -58,13 +119,19 @@ class NewsScraper:
                 continue
                 
             # If it's English, apply the filter
-            text = f"{article['title']} {article['summary']}".lower()
-            if not any(word in text for word in exclude_keywords):
+            text = f"{article['title']} {article['summary']}"
+            if not self.EXCLUDE_PATTERN.search(text):
                 self.filtered_data.append(article)
         
         print(f"Milestone reached: Kept {len(self.filtered_data)} articles for the next phase.")
 
-    def save_to_file(self, filename="../data/filtered_news.json"):
+    def scrape_all(self):
+        """One-call method to fetch, filter and return news."""
+        self.fetch_feeds()
+        self.filter_articles()
+        return self.filtered_data
+
+    def save_to_file(self, filename="data/filtered_news.json"):
         """Saves the filtered and processed data to the data folder."""
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(self.filtered_data, f, ensure_ascii=False, indent=4)

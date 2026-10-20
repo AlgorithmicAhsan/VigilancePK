@@ -1,0 +1,4 @@
+# Local data artifacts - never committed.
+/*.json
+/*.csv
+/chroma_db/

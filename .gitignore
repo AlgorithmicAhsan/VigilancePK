@@ -197,13 +197,19 @@ cython_debug/
 
 # --- Vigilance-PK Custom Ignores ---
 
-# Ignore all raw and processed news data
-data/
-*.csv
-*.json
+# Ignore all raw and processed news data.
+# NOTE: scoped to data/ on purpose. A bare `*.json` / `*.csv` here silently
+# swallowed every config, fixture and Postman collection in the repo.
+data/*.json
+data/*.csv
+data/chroma_db/
 
 # Ignore local AI database (ChromaDB)
 news_db/
+
+# Evaluation caches
+.deepeval/
+.deepeval-cache.json
 
 # Ignore Python environment and cache
 __pycache__/
