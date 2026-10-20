@@ -45,12 +45,12 @@ graph TD
 *   **Universal Translator**: Automated pre-processing of Urdu context for the LLM judge during evaluations.
 
 ### 🧠 Advanced AI Triage (The Jurist)
-*   **Gemini Flash API / Ollama**: Hybrid inference support for both cloud (Gemini) and local (Qwen/Llama) models.
+*   **Gemini Flash API**: Cloud inference for both classification and chat, so the backend fits a free-tier host.
 *   **Two-Tier Taxonomy**: Automated mapping of reports to HRCP (Human Rights Commission of Pakistan) categories.
 *   **Grounded Analyst Prompting**: Hardened system prompts and zero-temperature configurations to eliminate hallucinations.
 
 ### 📊 Featherweight Analytical Dashboard
-*   **Zero-Dependency UI**: A high-performance dashboard built with Vanilla HTML/JS and Tailwind CSS. No `node_modules` required.
+*   **No-Build UI**: A single-file dashboard in vanilla HTML/JS with Tailwind CSS. No `node_modules` and no build step. Note that Tailwind, Lucide and the web fonts load from public CDNs at runtime — self-host them if your threat model rules out third-party requests from an analyst's browser.
 *   **Real-time Streaming**: RAG responses delivered via Server-Sent Events (SSE) with live internal status updates.
 *   **Source Citation**: Every claim is linked back to the original verified news source (BBC, Dawn, Jang, etc.).
 
@@ -63,7 +63,7 @@ graph TD
 | **Backend** | Python 3.11, FastAPI, Uvicorn |
 | **Frontend** | Vanilla HTML5, Tailwind CSS (CDN), Lucide Icons |
 | **NLP** | Stanza (Urdu/English), Sentence-Transformers |
-| **LLM** | Google Gemini (Flash 1.5/2.0), Ollama (Qwen2.5/Llama3) |
+| **LLM** | Google Gemini (Flash) |
 | **Database** | ChromaDB (Vector Database) |
 | **Evaluation** | DeepEval (RAG Faithfulness & Relevancy) |
 
@@ -77,12 +77,15 @@ graph TD
 
 ### 2. Environment Setup
 ```bash
-# Install dependencies
+# Install runtime dependencies
 pip install -r requirements.txt
+
+# Or, for development (adds pytest + deepeval)
+pip install -r requirements-dev.txt
 
 # Configure Environment
 cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY or select your OLLAMA_MODEL
+# Edit .env and set GOOGLE_API_KEY, CHAT_MODEL and CLASSIFY_MODEL
 ```
 
 ### 3. Execution
@@ -94,8 +97,13 @@ uvicorn src.api:app --reload --port 8000
 # Simply open 'lite-web/index.html' in any modern web browser.
 ```
 
+If you serve the dashboard from anywhere other than your own machine, set
+`API_BASE` at the top of the `<script>` block in `lite-web/index.html` to your
+deployed API URL, and set `ALLOWED_ORIGINS` in `.env` to match.
+
 ### 4. Intelligence Audit
-To verify the system's analytical accuracy:
+RAG quality is scored with DeepEval. The test suite is not yet in the
+repository (see ADR-009); once added it runs with:
 ```bash
 deepeval test run tests/test_eval_rag.py
 ```
