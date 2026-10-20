@@ -1,11 +1,10 @@
 import email.utils
 import feedparser
+import html
 import json
 import re
 import socket
 from datetime import datetime, timezone
-from tqdm import tqdm
-from src.nlp_engine import UrduProcessor
 
 # Seconds to wait on a single feed before giving up. feedparser has no timeout
 # argument, so we bound it at the socket layer - without this one unresponsive
@@ -14,6 +13,25 @@ FEED_TIMEOUT_SECONDS = 20
 
 # Some publishers reject requests without a recognisable agent string.
 USER_AGENT = "Vigilance-PK/1.0 (+human rights monitoring; RSS reader)"
+
+TAG_PATTERN = re.compile(r"<[^>]+>")
+SPACE_PATTERN = re.compile(r"\s+")
+
+
+def clean_text(value) -> str:
+    """Plain text from an RSS field (ADR-020).
+
+    Summaries arrive as HTML. Left in, the tags were embedded, classified and
+    shown as noise. Tags go first, then entities are decoded, so an encoded
+    "&lt;script&gt;" ends up as harmless literal text, never as markup.
+    """
+    text = TAG_PATTERN.sub(" ", str(value or ""))
+    return SPACE_PATTERN.sub(" ", html.unescape(text)).strip()
+
+
+def is_urdu(text) -> bool:
+    """Arabic-script characters mean Urdu for our feeds (ADR-021)."""
+    return any("\u0600" <= ch <= "\u06ff" for ch in text or "")
 
 
 class NewsScraper:
@@ -29,7 +47,6 @@ class NewsScraper:
         }
         self.data = []
         self.filtered_data = []
-        self.processor = UrduProcessor()
 
     def fetch_feeds(self):
         """Fetches, parses, and processes all defined RSS feeds."""
@@ -70,26 +87,25 @@ class NewsScraper:
                 # Try to extract image URL
                 image_url = ""
                 if hasattr(entry, 'media_content') and entry.media_content:
-                    image_url = entry.media_content[0]['url']
+                    image_url = entry.media_content[0].get('url', '')
                 elif hasattr(entry, 'links'):
                     for link in entry.links:
                         if 'image' in link.get('type', ''):
                             image_url = link.get('href', '')
                             break
 
-                article = {
+                title = clean_text(entry.get("title", ""))
+                summary = clean_text(entry.get("summary", ""))
+                self.data.append({
                     "source": name,
-                    "title": entry.get("title", ""),
+                    "title": title,
                     "link": entry.get("link", ""),
                     "published": published_iso,
-                    "summary": entry.get("summary", ""),
+                    "summary": summary,
                     "image": image_url,
+                    "language": "urdu" if is_urdu(title) or is_urdu(summary) else "english",
                     "fetched_at": datetime.now(timezone.utc).isoformat()
-                }
-                
-                # Apply Phase 2: NLP Processing (Detection + Normalization)
-                processed_article = self.processor.process_article(article)
-                self.data.append(processed_article)
+                })
         
         print(f"Total articles fetched: {len(self.data)}")
 

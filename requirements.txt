@@ -3,7 +3,7 @@
 # automatically. Dev/test tooling lives in requirements-dev.txt.
 #
 # NOTE: torch is deliberately NOT pinned here. It arrives via
-# sentence-transformers and stanza, and pinning a local CUDA build
+# sentence-transformers (until ADR-005 lands), and pinning a local CUDA build
 # (e.g. 2.9.0+cu126) makes this file uninstallable from PyPI.
 
 # --- API layer ---
@@ -14,8 +14,8 @@ python-dotenv==1.2.2
 # --- Scout: ingestion ---
 feedparser==6.0.12
 
-# --- Jurist: classification ---
-google-generativeai==0.8.6
+# --- LLM: classification + chat (src/llm.py) ---
+google-genai==2.3.0
 
 # --- Vault: embeddings + vector store ---
 chromadb==1.5.5
@@ -24,9 +24,6 @@ sentence-transformers==5.2.3
 # violation in core_model_loading._materialize_copy -> torch.storage) while
 # loading the embedding model. Verify with a clean install before relaxing.
 transformers>=4.41,<5
-
-# --- NLP ---
-stanza==1.11.1
 
 # --- Shared ---
 tqdm==4.67.3
