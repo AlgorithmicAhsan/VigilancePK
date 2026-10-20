@@ -3,163 +3,317 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vigilance-PK // Lite Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <title>Vigilance-PK</title>
+    <!--
+        Self-contained on purpose (ADR-026): no CDN scripts, icon libraries or
+        web fonts. Analysts' browsers make no third-party requests.
+    -->
     <style>
-        :root { --background: #0A0E1A; --primary: #F59E0B; --secondary: #06B6D4; }
-        body { background-color: var(--background); color: #cbd5e1; font-family: 'Inter', sans-serif; overflow: hidden; }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-        .glass { background: rgba(13, 18, 33, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
-        .pulse { animation: pulse-green 2s infinite; }
-        @keyframes spin-slow {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        :root {
+            color-scheme: dark;
+            --bg: #0f1216;
+            --surface: #161a20;
+            --surface-2: #1d232b;
+            --border: #2a313b;
+            --text: #e7e9ec;
+            --text-2: #aab2bd;
+            --text-3: #808a97;
+            --accent: #6ea8fe;
+            --accent-text: #0b1220;
+            --focus: #6ea8fe;
+            --critical: #f87171;
+            --high: #fb923c;
+            --medium: #facc15;
+            --low: #8b95a3;
+            --error: #f87171;
+            --ok: #4ade80;
+            --radius: 8px;
+            --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+            --font-urdu: "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Segoe UI", system-ui, sans-serif;
         }
-        .animate-spin-slow {
-            animation: spin-slow 2s linear infinite;
+        @media (prefers-color-scheme: light) {
+            :root {
+                color-scheme: light;
+                --bg: #f5f6f8;
+                --surface: #ffffff;
+                --surface-2: #f0f2f5;
+                --border: #dce0e5;
+                --text: #15181c;
+                --text-2: #48505c;
+                --text-3: #687280;
+                --accent: #1d4ed8;
+                --accent-text: #ffffff;
+                --focus: #1d4ed8;
+                --critical: #b91c1c;
+                --high: #c2410c;
+                --medium: #a16207;
+                --low: #5f6875;
+                --error: #b91c1c;
+                --ok: #15803d;
+            }
         }
-        #hud-modal { display: none; }
-        .hud-content { 
-            background: rgba(13, 18, 33, 0.9); 
-            backdrop-filter: blur(16px); 
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            box-shadow: 0 0 40px rgba(0,0,0,0.5), 0 0 20px rgba(245, 158, 11, 0.1);
+
+        * { box-sizing: border-box; }
+        /* Components below set display, which would otherwise override the hidden attribute. */
+        [hidden] { display: none !important; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg);
+            color: var(--text);
+            font: 14px/1.5 var(--font);
+        }
+        h1, h2, h3, p { margin: 0; }
+        a { color: inherit; }
+        button, input { font: inherit; color: inherit; }
+        :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+        .sr-only {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+        }
+        .muted { color: var(--text-3); }
+
+        /* --- Buttons --- */
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            height: 34px; padding: 0 14px;
+            border: 1px solid var(--border); border-radius: var(--radius);
+            background: var(--surface); cursor: pointer; white-space: nowrap;
+        }
+        .btn:hover:not(:disabled) { background: var(--surface-2); }
+        .btn:disabled { opacity: .6; cursor: default; }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+        .btn-primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+        .btn svg { width: 16px; height: 16px; flex: none; }
+        .spinning svg { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (prefers-reduced-motion: reduce) { .spinning svg { animation: none; } }
+
+        /* --- Top bar --- */
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between; gap: 16px;
+            padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--surface);
+        }
+        .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .brand svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
+        .brand h1 { font-size: 16px; font-weight: 650; }
+        .brand p { font-size: 12px; color: var(--text-3); }
+        .actions { display: flex; align-items: center; gap: 8px; }
+        .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); margin-right: 4px; }
+        .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
+        .conn[data-state="ok"] .dot { background: var(--ok); }
+        .conn[data-state="down"] .dot { background: var(--error); }
+        .conn[data-state="down"] { color: var(--error); }
+
+        /* --- Layout --- */
+        .layout {
+            flex: 1; min-height: 0;
+            display: grid; grid-template-columns: minmax(320px, 440px) 1fr;
+        }
+        .panel { display: flex; flex-direction: column; min-height: 0; }
+        .feed { border-right: 1px solid var(--border); }
+        .panel-head {
+            display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+            padding: 14px 20px 10px;
+        }
+        .panel-head h2 { font-size: 14px; font-weight: 600; }
+        .panel-head span { font-size: 12px; }
+
+        /* --- Notices (sync progress / results / errors) --- */
+        .notice {
+            display: flex; align-items: flex-start; gap: 10px;
+            margin: 0 20px 10px; padding: 10px 12px;
+            border: 1px solid var(--border); border-radius: var(--radius);
+            background: var(--surface-2); font-size: 13px; color: var(--text-2);
+        }
+        .notice[data-kind="error"] { border-color: var(--error); color: var(--error); }
+        .notice p { flex: 1; }
+        .notice button { border: 0; background: none; cursor: pointer; color: var(--text-3); padding: 0 2px; }
+
+        /* --- Feed --- */
+        /* minmax(0, 1fr): a plain auto column grows to its widest line and overflows on phones. */
+        .feed-list { list-style: none; margin: 0; padding: 0 20px 20px; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; }
+        .report {
+            padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+            background: var(--surface); border-left: 3px solid var(--sev, var(--low));
+        }
+        .report-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); margin-bottom: 6px; }
+        .sev {
+            font-weight: 600; color: var(--sev, var(--low));
+            padding: 1px 7px; border-radius: 99px;
+            background: color-mix(in srgb, var(--sev, var(--low)) 14%, transparent);
+        }
+        .sev-critical { --sev: var(--critical); }
+        .sev-high { --sev: var(--high); }
+        .sev-medium { --sev: var(--medium); }
+        .sev-low { --sev: var(--low); }
+        .report h3 { font-size: 14px; font-weight: 600; line-height: 1.4; }
+        .report h3 a { text-decoration: none; }
+        .report h3 a:hover { text-decoration: underline; }
+        .report .summary {
+            margin-top: 4px; color: var(--text-2); font-size: 13px;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .report .labels { margin-top: 8px; font-size: 12px; color: var(--text-3); }
+        .report details { margin-top: 6px; font-size: 12px; color: var(--text-2); }
+        .report summary { cursor: pointer; color: var(--text-3); }
+        .report details p { margin-top: 4px; }
+        [lang="ur"] { font-family: var(--font-urdu); line-height: 1.9; }
+        .empty { padding: 40px 20px; text-align: center; color: var(--text-3); }
+
+        /* --- Chat --- */
+        .chat-log { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 20px 20px; }
+        .chat-inner { max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+        .intro { padding: 24px 0; color: var(--text-2); }
+        .intro p { margin-bottom: 12px; }
+        .suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .msg-user {
+            justify-self: end; max-width: 80%;
+            padding: 10px 14px; border-radius: var(--radius);
+            background: var(--surface-2); border: 1px solid var(--border);
+        }
+        .msg-bot { padding: 14px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+        .msg-status { font-size: 13px; color: var(--text-3); }
+        .msg-body p + p, .msg-body p + ul, .msg-body ul + p { margin-top: 10px; }
+        .msg-body ul { margin: 8px 0 0; padding-left: 20px; }
+        .msg-body li + li { margin-top: 4px; }
+        .msg-error { margin-top: 8px; color: var(--error); font-size: 13px; }
+        .sources { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-3); }
+        .sources ol { margin: 4px 0 0; padding-left: 18px; }
+        .sources li { margin-top: 2px; }
+        .sources a { color: var(--text-2); }
+        .composer { display: flex; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--border); background: var(--surface); }
+        .composer-inner { display: flex; gap: 8px; width: 100%; max-width: 760px; margin: 0 auto; }
+        .composer input {
+            flex: 1; min-width: 0; height: 40px; padding: 0 12px;
+            border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg);
+        }
+        .composer .btn { height: 40px; }
+
+        /* --- Dialogs --- */
+        dialog {
+            width: min(440px, calc(100vw - 32px)); padding: 20px;
+            border: 1px solid var(--border); border-radius: 10px;
+            background: var(--surface); color: var(--text);
+        }
+        dialog::backdrop { background: rgb(0 0 0 / .5); }
+        dialog h2 { font-size: 16px; margin-bottom: 12px; }
+        dialog .help { color: var(--text-2); font-size: 13px; margin-bottom: 12px; }
+        dialog input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
+        dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+        dl.status { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 13px; }
+        dl.status dt { color: var(--text-3); }
+        dl.status dd { margin: 0; overflow-wrap: anywhere; }
+
+        /* --- Narrow screens: stack the panels and let the page scroll --- */
+        @media (max-width: 860px) {
+            body { height: auto; }
+            .layout { display: block; }
+            .feed { border-right: 0; border-bottom: 1px solid var(--border); }
+            .feed-list { max-height: 55vh; }
+            .chat-log { min-height: 50vh; }
+            .topbar { flex-wrap: wrap; padding: 12px 16px; }
+            .panel-head, .chat-log { padding-left: 16px; padding-right: 16px; }
+            .feed-list { padding: 0 16px 16px; }
+            .notice { margin: 0 16px 10px; }
+            .composer { padding: 12px 16px; }
         }
     </style>
 </head>
-<body class="flex h-screen selection:bg-amber-500/30">
-
-    <!-- CUSTOM HUD MODAL -->
-    <div id="hud-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
-        <div class="hud-content max-w-md w-full p-8 rounded-2xl border border-amber-500/30 animate-in fade-in zoom-in duration-300">
-            <div class="flex items-center gap-3 mb-6 border-b border-slate-800 pb-4">
-                <i data-lucide="shield" class="w-5 h-5 text-amber-500"></i>
-                <h2 id="hud-title" class="font-mono text-sm uppercase tracking-[0.2em] text-white">System_Status</h2>
-            </div>
-            <div id="hud-body" class="font-mono text-[11px] text-slate-300 leading-relaxed whitespace-pre-wrap uppercase tracking-wider mb-8">
-                <!-- Content injected here -->
-            </div>
-            <button onclick="closeHUD()" class="w-full py-3 bg-amber-500 text-black font-bold rounded-xl hover:bg-amber-400 transition-all uppercase tracking-widest text-xs">Acknowledge</button>
-        </div>
-    </div>
-
-    <!-- 1. SIDEBAR -->
-    <aside class="w-16 md:w-20 flex flex-col items-center py-8 border-r border-slate-800/50 bg-[#0D1221] shrink-0">
-        <div class="p-2 mb-10 bg-amber-500/10 rounded-xl border border-amber-500/20">
-            <i data-lucide="shield" class="w-6 h-6 text-amber-500"></i>
-        </div>
-        <nav class="flex flex-col gap-10">
-            <button id="sync-btn" title="Sync Intel" class="focus:outline-none">
-                <i data-lucide="radio" class="w-5 h-5 text-amber-500 cursor-pointer"></i>
-            </button>
-            <button id="activity-btn" title="System Health" class="focus:outline-none">
-                <i data-lucide="activity" class="w-5 h-5 text-slate-500 hover:text-cyan-400 cursor-pointer"></i>
-            </button>
-            <button id="db-btn" title="Repository Stats" class="focus:outline-none">
-                <i data-lucide="database" class="w-5 h-5 text-slate-500 hover:text-cyan-400 cursor-pointer"></i>
-            </button>
-            <button id="chat-tab-btn" title="Analytical Nexus" class="focus:outline-none">
-                <i data-lucide="message-square" class="w-5 h-5 text-slate-500 hover:text-cyan-400 cursor-pointer"></i>
-            </button>
-        </nav>
-        <div class="mt-auto flex flex-col gap-8">
-            <button id="settings-btn" title="Configuration" class="focus:outline-none">
-                <i data-lucide="settings" class="w-5 h-5 text-slate-600 hover:text-white cursor-pointer"></i>
-            </button>
-            <i data-lucide="log-out" class="w-5 h-5 text-slate-600 hover:text-red-400 cursor-pointer"></i>
-        </div>
-    </aside>
-
-    <!-- 2. MAIN CONTENT AREA (Feed + Chat) -->
-    <main class="flex-1 flex flex-col overflow-hidden">
-        
-        <!-- Header -->
-        <header class="p-6 border-b border-slate-800/50 flex justify-between items-center bg-[#0A0E1A]/80 backdrop-blur-md">
+<body>
+    <header class="topbar">
+        <div class="brand">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <div>
-                <h1 class="text-lg font-bold text-white flex items-center gap-2 font-mono">VIGILANCE-PK <span class="text-[9px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase">Lite</span></h1>
-                <p class="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Live Intelligence Stream</p>
-            </div>
-            <div class="flex items-center gap-4">
-                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-500/10 border border-slate-500/20">
-                    <div id="status-dot" class="w-1.5 h-1.5 bg-slate-500 rounded-full"></div>
-                    <span id="status-label" class="text-[9px] font-mono text-slate-500 uppercase tracking-tighter">Checking...</span>
-                </div>
-                <button onclick="handleSync()" title="Run Pipeline" class="p-2 rounded-lg bg-slate-800/50 border border-slate-700 hover:border-amber-500/50 transition-all">
-                    <i data-lucide="refresh-cw" class="w-4 h-4 text-slate-400"></i>
-                </button>
-            </div>
-        </header>
-
-        <!-- Dynamic Panels Container -->
-        <div class="flex-1 flex overflow-hidden">
-            
-            <!-- LEFT PANEL: Incident Feed -->
-            <div class="w-[450px] border-r border-slate-800/50 flex flex-col bg-[#080B14]">
-                <div id="feed-container" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                    <!-- Cards will be injected here -->
-                    <div class="h-full flex items-center justify-center opacity-20">
-                        <p class="font-mono text-xs italic tracking-widest animate-pulse">[ ANALYZING_VAULT ]</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- RIGHT PANEL: Analytical Nexus (Chat) -->
-            <div class="flex-1 flex flex-col bg-[#0A0E1A]">
-                <div id="chat-container" class="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
-                    <div id="chat-intro" class="h-full flex flex-col items-center justify-center text-center">
-                        <div class="opacity-30 flex flex-col items-center">
-                            <i data-lucide="terminal" class="w-10 h-10 mb-4 text-cyan-500"></i>
-                            <h3 class="font-mono text-sm uppercase tracking-widest mb-1 text-white">Analytical Nexus</h3>
-                            <p class="text-[10px] font-mono max-w-[200px] uppercase mb-8">Query the repository for real-time inference...</p>
-                        </div>
-                        
-                        <div class="space-y-2 max-w-xs opacity-50 hover:opacity-100 transition-opacity">
-                            <div class="text-[8px] uppercase tracking-widest text-cyan-500 mb-2">Suggested Inquiries</div>
-                            <div class="grid grid-cols-1 gap-2">
-                                <button onclick="document.getElementById('chat-input').value='Analyze recent religious minority violations in Punjab'; handleChat()" class="text-left p-2 rounded border border-white/5 bg-white/5 hover:bg-cyan-500/10 text-[9px] font-mono transition-colors">/ RELIGIOUS_MINORITY_AUDIT</button>
-                                <button onclick="document.getElementById('chat-input').value='Summarize reports regarding enforced disappearances'; handleChat()" class="text-left p-2 rounded border border-white/5 bg-white/5 hover:bg-cyan-500/10 text-[9px] font-mono transition-colors">/ DISAPPEARANCE_TRACKER</button>
-                                <button onclick="document.getElementById('chat-input').value='Provide a summary of legislative updates'; handleChat()" class="text-left p-2 rounded border border-white/5 bg-white/5 hover:bg-cyan-500/10 text-[9px] font-mono transition-colors">/ LEGISLATIVE_SUMMARY</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Input Area -->
-                <footer class="p-6 border-t border-slate-800/50 bg-[#0D1221]">
-                    <div class="max-w-3xl mx-auto relative">
-                        <input id="chat-input" type="text" placeholder="Initiate analysis query..." 
-                               class="w-full bg-[#121829] border border-slate-700 rounded-xl px-5 py-4 text-sm focus:outline-none focus:border-amber-500/40 text-white transition-all">
-                        <button id="send-btn" onclick="handleChat()" class="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-amber-500 text-black rounded-lg hover:bg-amber-600 transition-all">
-                            <i data-lucide="send" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                </footer>
+                <h1>Vigilance-PK</h1>
+                <p>Human rights news triage for Pakistan</p>
             </div>
         </div>
+        <div class="actions">
+            <span id="conn" class="conn" data-state="checking" role="status"><span class="dot"></span><span id="conn-label">Checking…</span></span>
+            <button id="status-btn" class="btn" type="button">Status</button>
+            <button id="sync-btn" class="btn btn-primary" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg>
+                <span id="sync-label">Sync now</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="layout">
+        <section class="panel feed" aria-labelledby="feed-title">
+            <div class="panel-head">
+                <h2 id="feed-title">Latest reports</h2>
+                <span id="feed-count" class="muted"></span>
+            </div>
+            <div id="notice" class="notice" role="status" hidden>
+                <p id="notice-text"></p>
+                <button id="notice-close" type="button" aria-label="Dismiss">✕</button>
+            </div>
+            <ol id="feed-list" class="feed-list">
+                <li class="empty">Loading reports…</li>
+            </ol>
+        </section>
+
+        <section class="panel chat" aria-labelledby="chat-title">
+            <div class="panel-head">
+                <h2 id="chat-title">Ask the repository</h2>
+            </div>
+            <div id="chat-log" class="chat-log">
+                <div id="chat-inner" class="chat-inner" aria-live="polite">
+                    <div id="chat-intro" class="intro">
+                        <p>Answers use only the reports stored here, and cite the source of each claim.</p>
+                        <div class="suggestions">
+                            <button class="btn" type="button" data-q="Summarize recent reports of enforced disappearances">Enforced disappearances</button>
+                            <button class="btn" type="button" data-q="What violence against religious minorities has been reported recently?">Violence against minorities</button>
+                            <button class="btn" type="button" data-q="Are there reports of custodial torture or deaths in police custody?">Custodial torture</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <form id="chat-form" class="composer">
+                <div class="composer-inner">
+                    <label for="chat-input" class="sr-only">Your question</label>
+                    <input id="chat-input" type="text" maxlength="2000" autocomplete="off"
+                           placeholder="Ask about the reports, e.g. protests in Balochistan">
+                    <button id="send-btn" class="btn btn-primary" type="submit">Ask</button>
+                </div>
+            </form>
+        </section>
     </main>
 
-    <script>
-        // --- Core Intelligence Logic ---
-        lucide.createIcons();
+    <dialog id="status-dialog" aria-labelledby="status-title">
+        <h2 id="status-title">System status</h2>
+        <dl id="status-list" class="status"></dl>
+        <form method="dialog" class="row"><button class="btn" type="submit">Close</button></form>
+    </dialog>
 
+    <!-- /sync is admin-only (ADR-022) -->
+    <dialog id="key-dialog" aria-labelledby="key-title">
+        <form id="key-form">
+            <h2 id="key-title">Admin key required</h2>
+            <p class="help">Syncing fetches and classifies new reports. Enter the ADMIN_KEY set on the server. It is kept for this tab only.</p>
+            <label for="key-input" class="sr-only">Admin key</label>
+            <input id="key-input" type="password" autocomplete="current-password" required>
+            <div class="row">
+                <button id="key-cancel" class="btn" type="button">Cancel</button>
+                <button class="btn btn-primary" type="submit">Start sync</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script>
         // Single place to point the dashboard at its backend.
         // Change this to your deployed API before publishing the page.
         const API_BASE = 'http://localhost:8000';
 
-        // Monotonic id source for chat turns.
-        let messageCounter = 0;
+        const $ = (id) => document.getElementById(id);
 
-        // --- Untrusted-content helpers ---------------------------------
-        // Everything rendered in the feed originates in third-party RSS, and
-        // RSS summaries routinely carry HTML. Anything interpolated into an
-        // innerHTML template must go through esc(); anything used as a URL
-        // must go through safeUrl().
+        // --- Untrusted-content helpers (ADR-010) -------------------------
+        // Everything in the feed and the answers originates in third-party
+        // RSS. Anything interpolated into HTML must go through esc();
+        // anything used as a URL must go through safeUrl().
         function esc(value) {
             return String(value ?? '')
                 .replace(/&/g, '&amp;')
@@ -169,8 +323,7 @@
                 .replace(/'/g, '&#39;');
         }
 
-        // Only http(s) survives. Blocks javascript:, data: and friends
-        // arriving via a feed <link> or a compromised source.
+        // Only http(s) survives. Blocks javascript:, data: and friends.
         function safeUrl(value) {
             const raw = String(value ?? '').trim();
             if (!raw) return '';
@@ -182,260 +335,341 @@
             }
         }
 
+        // "2026-10-20T08:15:00+00:00" -> "20 Oct"
+        function shortDate(iso) {
+            const d = iso ? new Date(iso) : null;
+            if (!d || isNaN(d)) return 'Undated';
+            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        }
+
+        function timeAgo(iso) {
+            const d = iso ? new Date(iso) : null;
+            if (!d || isNaN(d)) return '';
+            const mins = Math.round((Date.now() - d) / 60000);
+            if (mins < 1) return 'just now';
+            if (mins < 60) return `${mins} min ago`;
+            const hours = Math.round(mins / 60);
+            return hours < 24 ? `${hours} h ago` : d.toLocaleString('en-GB');
+        }
+
+        // Minimal Markdown for answers: paragraphs, bullet lists, **bold**,
+        // headings shown as bold lines. The text is escaped FIRST, so the
+        // only markup that can appear is the markup added here.
+        function renderAnswer(text) {
+            const inline = (s) => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            let html = '', inList = false;
+            for (const line of esc(text).split('\n')) {
+                const item = line.match(/^\s*[*-]\s+(.*)$/);
+                if (item) {
+                    if (!inList) { html += '<ul>'; inList = true; }
+                    html += `<li>${inline(item[1])}</li>`;
+                    continue;
+                }
+                if (inList) { html += '</ul>'; inList = false; }
+                const heading = line.match(/^#{1,4}\s+(.*)$/);
+                if (heading) html += `<p><strong>${inline(heading[1])}</strong></p>`;
+                else if (line.trim()) html += `<p>${inline(line)}</p>`;
+            }
+            return inList ? html + '</ul>' : html;
+        }
+
+        // --- Notices -----------------------------------------------------
+        function showNotice(text, kind = 'info') {
+            $('notice-text').textContent = text;
+            $('notice').dataset.kind = kind;
+            $('notice').hidden = false;
+        }
+        function hideNotice() { $('notice').hidden = true; }
+        $('notice-close').addEventListener('click', hideNotice);
+
+        // --- Feed --------------------------------------------------------
+        const SEVERITY_LABEL = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+
+        function reportHtml(item) {
+            const doc = String(item.document || '');
+            const lines = doc.split('\n');
+            const meta = item.metadatas || {};
+            const severity = SEVERITY_LABEL[meta.severity] ? meta.severity : 'low';
+            const lang = meta.language === 'urdu' ? ' lang="ur"' : '';
+            const href = safeUrl(meta.link);
+            const title = esc(lines[0]);
+            const summary = esc(lines.slice(1).join(' ').trim());
+            const tags = String(meta.specific_tags || '').split(',').filter(Boolean).join(', ');
+            const labels = [meta.category, tags].filter(Boolean).map(esc).join(' · ');
+            const reasoning = esc(meta.reasoning || '');
+
+            return `
+                <li class="report sev-${severity}">
+                    <div class="report-meta">
+                        <span class="sev">${SEVERITY_LABEL[severity]}</span>
+                        <span>${esc(meta.source || 'Unknown source')}</span>
+                        <span aria-hidden="true">·</span>
+                        <time datetime="${esc(meta.published || '')}">${esc(shortDate(meta.published))}</time>
+                    </div>
+                    <h3 dir="auto"${lang}>${href
+                        ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${title}</a>`
+                        : title}</h3>
+                    ${summary ? `<p class="summary" dir="auto"${lang}>${summary}</p>` : ''}
+                    ${labels ? `<p class="labels">${labels}</p>` : ''}
+                    ${reasoning ? `<details><summary>Why this rating</summary><p>${reasoning}</p></details>` : ''}
+                </li>`;
+        }
+
         async function loadFeed() {
-            const container = document.getElementById('feed-container');
+            const list = $('feed-list');
             try {
-                const res = await fetch(`${API_BASE}/feed`);
+                const res = await fetch(`${API_BASE}/feed?limit=40`);
                 if (!res.ok) throw new Error(`API returned ${res.status}`);
                 const data = await res.json();
-
                 if (Array.isArray(data) && data.length > 0) {
-                    container.innerHTML = data.map(item => {
-                        const doc = String(item.document || '');
-                        const title = esc(doc.split('\n')[0]);
-                        const summary = esc(doc.split('\n').slice(1,3).join(' ') || 'No summary available.');
-                        const meta = item.metadatas || {};
-                        const source = esc(meta.source || 'INTEL');
-                        const category = esc(meta.category || 'GENERAL');
-                        const severity = String(meta.severity || 'medium').toLowerCase();
-                        const date = esc(meta.published ? meta.published.slice(5,11) : 'UNDATED');
-
-                        const borderMap = { critical: 'border-l-red-500', high: 'border-l-amber-500', medium: 'border-l-cyan-500', low: 'border-l-slate-500' };
-                        const borderColor = borderMap[severity] || 'border-l-cyan-500';
-
-                        return `
-                            <div class="group p-4 rounded-xl bg-slate-900/40 border border-slate-800/50 ${borderColor} border-l-4 hover:bg-slate-800/60 hover:border-slate-700 transition-all duration-300 cursor-pointer mb-4">
-                                <div class="flex justify-between items-center mb-2">
-                                    <span class="text-[10px] font-bold text-cyan-500 font-mono tracking-tighter uppercase">
-                                        ${source} <span class="text-slate-600 mx-1">//</span> ${category}
-                                    </span>
-                                    <span class="text-[9px] text-slate-600 font-mono uppercase tracking-widest">${date}</span>
-                                </div>
-                                <h3 class="text-sm font-semibold text-slate-100 leading-snug group-hover:text-amber-400 transition-colors mb-2 line-clamp-2">${title}</h3>
-                                <p class="text-[11px] text-slate-400 leading-relaxed line-clamp-2 opacity-80 group-hover:opacity-100 transition-opacity">${summary}</p>
-                            </div>
-                        `;
-                    }).join('');
+                    list.innerHTML = data.map(reportHtml).join('');
+                    $('feed-count').textContent = `${data.length} most recent`;
                 } else {
-                    container.innerHTML = `<div class="h-full flex items-center justify-center text-slate-600 font-mono text-[10px] uppercase italic tracking-widest mt-20">[ VAULT_EMPTY // RUN_SYNC ]</div>`;
+                    list.innerHTML = '<li class="empty">No reports yet. Run a sync to fetch the latest news.</li>';
+                    $('feed-count').textContent = '';
                 }
             } catch (err) {
-                container.innerHTML = `<p class="text-xs text-red-500 font-mono p-4">PIPELINE_ERROR: ${esc(err.message)}</p>`;
+                list.innerHTML = `<li class="empty">Couldn't load reports: ${esc(err.message)}</li>`;
+                $('feed-count').textContent = '';
             }
         }
 
-        async function handleChat() {
-            const input = document.getElementById('chat-input');
-            const container = document.getElementById('chat-container');
-            const query = input.value.trim();
-            if (!query) return;
+        // --- Chat --------------------------------------------------------
+        let chatBusy = false;
 
-            const intro = document.getElementById('chat-intro');
-            if (intro) intro.remove();
-            // A counter, not Date.now(): two messages sent in the same
-            // millisecond used to collide on the same element id.
-            const turn = ++messageCounter;
-            const assistantId = 'msg-' + turn;
-            const sourceId = 'src-' + turn;
+        function sourcesHtml(sources) {
+            if (!sources.length) return '';
+            const items = sources.map(s => {
+                const href = safeUrl(s.link);
+                const label = `${esc(s.source || 'Unknown')}, ${esc(shortDate(s.published))}`;
+                const title = esc(s.title || '');
+                return `<li>${label}: ${href
+                    ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" dir="auto">${title}</a>`
+                    : `<span dir="auto">${title}</span>`}</li>`;
+            }).join('');
+            return `<div class="sources">Reports searched<ol>${items}</ol></div>`;
+        }
 
-            container.insertAdjacentHTML('beforeend', `<div class="flex justify-end mb-6"><div class="max-w-[80%] p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-50 text-sm">${esc(query)}</div></div>`);
-            container.insertAdjacentHTML('beforeend', `<div class="flex flex-col gap-2 items-start mb-6"><div id="${sourceId}" class="flex gap-2 flex-wrap"></div><div id="${assistantId}" class="max-w-[90%] p-5 rounded-2xl bg-slate-900/50 border border-slate-800 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap"><span class="animate-pulse">Thinking...</span></div></div>`);
-            
-            input.value = '';
-            container.scrollTop = container.scrollHeight;
+        async function ask(query) {
+            if (chatBusy || !query) return;
+            chatBusy = true;
+            $('send-btn').disabled = true;
+            $('chat-intro')?.remove();
+
+            const log = $('chat-log');
+            const inner = $('chat-inner');
+            const userMsg = document.createElement('div');
+            userMsg.className = 'msg-user';
+            userMsg.dir = 'auto';
+            userMsg.textContent = query;
+            const bot = document.createElement('div');
+            bot.className = 'msg-bot';
+            bot.innerHTML = '<p class="msg-status">Searching reports…</p><div class="msg-body"></div><div class="msg-extra"></div>';
+            inner.append(userMsg, bot);
+            log.scrollTop = log.scrollHeight;
+
+            const status = bot.querySelector('.msg-status');
+            const body = bot.querySelector('.msg-body');
+            const extra = bot.querySelector('.msg-extra');
+            let answer = '', sources = [], buffer = '';
 
             try {
-                const response = await fetch(`${API_BASE}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) });
-                if (!response.ok) {
-                    const problem = await response.json().catch(() => ({}));
-                    throw new Error(problem.detail || `API returned ${response.status}`);
+                const res = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query }),
+                });
+                if (!res.ok) {
+                    const problem = await res.json().catch(() => ({}));
+                    throw new Error(typeof problem.detail === 'string' ? problem.detail : `API returned ${res.status}`);
                 }
-                const reader = response.body.getReader();
+                const reader = res.body.getReader();
                 const decoder = new TextDecoder();
-                let fullText = '', buffer = "";
-                const bubble = document.getElementById(assistantId);
-                const sourceContainer = document.getElementById(sourceId);
-                bubble.innerHTML = '';
-
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
                     buffer = lines.pop();
-
                     for (const line of lines) {
                         if (!line.trim()) continue;
-                        try {
-                            const parsed = JSON.parse(line);
-                            if (parsed.type === 'status') bubble.innerHTML = `<span class="animate-pulse text-amber-500/80 font-mono text-[10px] uppercase tracking-widest">${esc(parsed.data)}</span>`;
-                            if (parsed.type === 'sources' && sourceContainer) {
-                                // Source name and link both come from the feed, so both are sanitised.
-                                sourceContainer.innerHTML = (parsed.data || []).slice(0,3).map(s => {
-                                    const href = safeUrl(s.link);
-                                    const label = esc(s.source || 'Intel');
-                                    const classes = "px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/20 text-[10px] font-mono text-cyan-500 uppercase hover:bg-cyan-500/20 transition-all";
-                                    return href
-                                        ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" class="${classes}">${label} // READ_REPORT</a>`
-                                        : `<span class="${classes} opacity-60">${label} // NO_LINK</span>`;
-                                }).join('');
-                            }
-                            if (parsed.type === 'content') {
-                                if (fullText === '') bubble.innerHTML = '';
-                                fullText += parsed.data;
-                                bubble.innerText = fullText;
-                                container.scrollTop = container.scrollHeight;
-                            }
-                        } catch (e) { console.error(e); }
+                        let msg;
+                        try { msg = JSON.parse(line); } catch (e) { continue; }
+                        if (msg.type === 'status') status.textContent = msg.data;
+                        if (msg.type === 'sources') sources = Array.isArray(msg.data) ? msg.data : [];
+                        if (msg.type === 'content') {
+                            answer += msg.data;
+                            status.hidden = true;
+                            body.innerHTML = renderAnswer(answer);
+                            log.scrollTop = log.scrollHeight;
+                        }
+                        if (msg.type === 'error') {
+                            status.hidden = true;
+                            extra.insertAdjacentHTML('beforeend', `<p class="msg-error">${esc(msg.data)}</p>`);
+                        }
                     }
                 }
+                if (answer) extra.insertAdjacentHTML('beforeend', sourcesHtml(sources));
             } catch (err) {
-                document.getElementById(assistantId).innerHTML = `<span class="text-red-400 font-mono text-xs">CRITICAL_ERROR: ${esc(err.message)}</span>`;
+                status.hidden = true;
+                extra.innerHTML = `<p class="msg-error">Couldn't get an answer: ${esc(err.message)}</p>`;
+            } finally {
+                chatBusy = false;
+                $('send-btn').disabled = false;
+                log.scrollTop = log.scrollHeight;
             }
         }
 
-        // Guards against two sync polls running at once. The header refresh
-        // button and the sidebar button both land here, and only the sidebar
-        // one used to be disabled during a run.
-        let syncInterval = null;
+        $('chat-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = $('chat-input');
+            const query = input.value.trim();
+            if (!query || chatBusy) return;
+            input.value = '';
+            ask(query);
+        });
+        document.querySelectorAll('[data-q]').forEach(btn =>
+            btn.addEventListener('click', () => ask(btn.dataset.q)));
+
+        // --- Sync (ADR-022) ----------------------------------------------
+        // The admin key lives in sessionStorage: forgotten when the tab
+        // closes, never baked into the page source.
+        const ADMIN_KEY_STORAGE = 'vigilance-admin-key';
+        let syncTimer = null;
         let isSyncing = false;
 
-        async function handleSync() {
-            if (isSyncing) return;
-
-            const btn = document.getElementById('sync-btn');
-            const icon = btn?.querySelector('i');
-            const feedContainer = document.getElementById('feed-container');
-
-            isSyncing = true;
-            if (icon) icon.classList.add('animate-spin-slow');
-            if (btn) btn.disabled = true;
-
-            const finish = () => {
-                if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
-                isSyncing = false;
-                if (icon) icon.classList.remove('animate-spin-slow');
-                if (btn) btn.disabled = false;
-            };
-
-            feedContainer.innerHTML = `<div class="h-full flex items-center justify-center text-[10px] text-amber-500 font-mono uppercase tracking-[0.3em] animate-pulse mt-20">[ INITIALIZING_INGESTION ]</div>`;
-
+        function getAdminKey() {
+            try { return sessionStorage.getItem(ADMIN_KEY_STORAGE) || ''; } catch (e) { return ''; }
+        }
+        function setAdminKey(key) {
             try {
-                const res = await fetch(`${API_BASE}/sync?wipe=true`);
-                if (!res.ok) throw new Error(`API returned ${res.status}`);
-                await res.json();
+                if (key) sessionStorage.setItem(ADMIN_KEY_STORAGE, key);
+                else sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+            } catch (e) { /* storage blocked: the user is asked again next time */ }
+        }
 
-                // Polling loop. The pipeline writes in batches, so a card
-                // appearing does not mean it has finished - we keep polling
-                // until the record count stops growing.
-                let attempts = 0;
-                let lastCount = -1;
-                let stableTicks = 0;
+        $('sync-btn').addEventListener('click', () => {
+            if (isSyncing) return;
+            const key = getAdminKey();
+            if (key) startSync(key); else $('key-dialog').showModal();
+        });
+        $('key-cancel').addEventListener('click', () => $('key-dialog').close());
+        $('key-dialog').addEventListener('close', () => { $('key-input').value = ''; });
+        $('key-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const key = $('key-input').value.trim();
+            if (!key) return;
+            setAdminKey(key);
+            $('key-dialog').close();
+            startSync(key);
+        });
 
-                syncInterval = setInterval(async () => {
-                    attempts++;
-                    await loadFeed();
-                    const count = feedContainer.querySelectorAll('.group').length;
+        function setSyncing(active) {
+            isSyncing = active;
+            $('sync-btn').disabled = active;
+            $('sync-btn').classList.toggle('spinning', active);
+            $('sync-label').textContent = active ? 'Syncing…' : 'Sync now';
+            if (!active && syncTimer) { clearInterval(syncTimer); syncTimer = null; }
+        }
 
-                    if (count > 0 && count === lastCount) {
-                        stableTicks++;
-                    } else {
-                        stableTicks = 0;
-                    }
-                    lastCount = count;
-
-                    // Settled (count unchanged over two checks) or timed out at 3 min.
-                    if (stableTicks >= 2 || attempts > 18) {
-                        finish();
-                    }
-                }, 10000); // Check every 10 seconds
-
+        async function startSync(key) {
+            setSyncing(true);
+            showNotice('Sync running: fetching feeds and classifying new reports. This can take a few minutes.');
+            try {
+                const res = await fetch(`${API_BASE}/sync`, { method: 'POST', headers: { 'X-Admin-Key': key } });
+                if (res.status === 401) {
+                    setAdminKey('');
+                    throw new Error('the admin key was rejected.');
+                }
+                // 409 means a run is already going: follow that one instead.
+                if (!res.ok && res.status !== 409) {
+                    const problem = await res.json().catch(() => ({}));
+                    throw new Error(problem.detail || `API returned ${res.status}`);
+                }
+                followSync();
             } catch (err) {
-                finish();
-                feedContainer.innerHTML = `<div class="h-full flex items-center justify-center text-[10px] text-red-500 font-mono uppercase tracking-[0.2em] mt-20 px-4 text-center">[ SYNC_FAILED ]<br><span class="text-slate-500 normal-case tracking-normal">${esc(err.message)}</span></div>`;
+                setSyncing(false);
+                showNotice(`Sync failed: ${err.message}`, 'error');
             }
         }
 
-        // --- HUD Logic ---
-        function showHUD(title, content) {
-            document.getElementById('hud-title').innerText = title;
-            document.getElementById('hud-body').innerText = content;
-            document.getElementById('hud-modal').style.display = 'flex';
-        }
-        function closeHUD() { document.getElementById('hud-modal').style.display = 'none'; }
+        // Polls the server's own record of the run rather than guessing.
+        function followSync() {
+            let misses = 0;
+            syncTimer = setInterval(async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/sync/status`);
+                    if (!res.ok) throw new Error(`API returned ${res.status}`);
+                    const state = await res.json();
+                    misses = 0;
+                    if (state.running) return;
 
-        // --- Event Listeners ---
-        // Every value below is measured or read from the API. Nothing here is
-        // a placeholder: an intelligence tool that invents its own status
-        // readings cannot be trusted about anything else either.
-        document.getElementById('activity-btn').addEventListener('click', async () => {
+                    setSyncing(false);
+                    await loadFeed();
+                    if (state.error) {
+                        showNotice(state.error, 'error');
+                    } else if (state.result) {
+                        const r = state.result;
+                        const failed = r.failed ? ` ${r.failed} failed and will be retried next sync.` : '';
+                        showNotice(`Sync finished: ${r.new} new of ${r.fetched} fetched, ${r.classified} classified.${failed}`,
+                                   r.failed ? 'error' : 'info');
+                    }
+                } catch (err) {
+                    if (++misses >= 3) {
+                        setSyncing(false);
+                        showNotice(`Lost contact with the API during sync: ${err.message}`, 'error');
+                    }
+                }
+            }, 5000);
+        }
+
+        // --- Status ------------------------------------------------------
+        // Every value is measured or read from the API (ADR-013).
+        $('status-btn').addEventListener('click', async () => {
+            const rows = [];
             const started = performance.now();
             try {
                 const res = await fetch(`${API_BASE}/stats`);
                 const latency = Math.round(performance.now() - started);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                showHUD("SYSTEM_HEALTH", [
-                    `API_STATUS: ${data.status || 'UNKNOWN'}`,
-                    `ROUND_TRIP: ${latency}ms`,
-                    `ENDPOINT: ${API_BASE}`,
-                    `INFERENCE_ENGINE: ${data.engine || 'UNKNOWN'}`,
-                    `GEMINI_KEY: ${data.gemini_key_configured ? 'CONFIGURED' : 'NOT CONFIGURED'}`
-                ].join('\n'));
-            } catch (e) {
-                const latency = Math.round(performance.now() - started);
-                showHUD("SYSTEM_HEALTH", `API_STATUS: UNREACHABLE\nFAILED_AFTER: ${latency}ms\nENDPOINT: ${API_BASE}\nDETAIL: ${e.message}`);
+                if (!res.ok) throw new Error(`API returned ${res.status}`);
+                const stats = await res.json();
+                rows.push(['API', `Reachable (${latency} ms)`]);
+                rows.push(['Reports stored', stats.total_logs]);
+                rows.push(['Chat model', stats.engine]);
+                rows.push(['Gemini key', stats.gemini_key_configured ? 'Configured' : 'Missing']);
+                const sync = await fetch(`${API_BASE}/sync/status`).then(r => r.ok ? r.json() : null).catch(() => null);
+                if (sync?.running) rows.push(['Last sync', 'Running now']);
+                else if (sync?.finished_at) {
+                    const r = sync.result;
+                    rows.push(['Last sync', sync.error ? `Failed ${timeAgo(sync.finished_at)}`
+                        : `${timeAgo(sync.finished_at)}: ${r?.new ?? 0} new, ${r?.failed ?? 0} failed`]);
+                } else rows.push(['Last sync', 'None since the server started']);
+            } catch (err) {
+                rows.push(['API', `Unreachable after ${Math.round(performance.now() - started)} ms`]);
+                rows.push(['Detail', err.message]);
             }
-        });
-        document.getElementById('db-btn').addEventListener('click', async () => {
-            try {
-                const res = await fetch(`${API_BASE}/stats`);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                showHUD("REPOSITORY_STATS", `TOTAL_RECORDS: ${data.total_logs}\nSTATUS: ${data.status || 'UNKNOWN'}\nSTORAGE: CHROMADB_VECTOR_VAULT`);
-            } catch (e) { showHUD("ERROR", `DATABASE_ERROR: COULD NOT CONNECT TO VAULT.\nDETAIL: ${e.message}`); }
-        });
-        document.getElementById('settings-btn').addEventListener('click', async () => {
-            try {
-                const res = await fetch(`${API_BASE}/stats`);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                showHUD("SYSTEM_CONFIGURATION", [
-                    `ACTIVE_MODEL: ${data.engine}`,
-                    `INFERENCE_MODE: STREAMING`,
-                    `GEMINI_KEY: ${data.gemini_key_configured ? 'CONFIGURED' : 'NOT CONFIGURED'}`,
-                    `API_ENDPOINT: ${API_BASE}`
-                ].join('\n'));
-            } catch (e) { showHUD("ERROR", `CONFIG_ERROR: COULD NOT FETCH SYSTEM SETTINGS.\nDETAIL: ${e.message}`); }
+            rows.push(['Endpoint', API_BASE]);
+            $('status-list').innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+            $('status-dialog').showModal();
         });
 
-        document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') handleChat(); });
-        document.getElementById('sync-btn').addEventListener('click', handleSync);
-        document.getElementById('chat-tab-btn').addEventListener('click', () => { document.getElementById('chat-input').focus(); });
-
-        // The header badge reflects a real reachability check, not a constant.
-        async function refreshConnectionBadge() {
-            const dot = document.getElementById('status-dot');
-            const label = document.getElementById('status-label');
-            if (!dot || !label) return;
+        // The connection indicator reflects a real reachability check.
+        async function refreshConnection() {
+            const conn = $('conn');
             try {
                 const res = await fetch(`${API_BASE}/stats`);
-                if (!res.ok) throw new Error('unreachable');
-                dot.className = 'w-1.5 h-1.5 bg-green-500 rounded-full pulse';
-                label.className = 'text-[9px] font-mono text-green-500 uppercase tracking-tighter';
-                label.textContent = 'System_Online';
-                label.parentElement.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20';
+                if (!res.ok) throw new Error();
+                conn.dataset.state = 'ok';
+                $('conn-label').textContent = 'Connected';
             } catch (e) {
-                dot.className = 'w-1.5 h-1.5 bg-red-500 rounded-full';
-                label.className = 'text-[9px] font-mono text-red-500 uppercase tracking-tighter';
-                label.textContent = 'API_Offline';
-                label.parentElement.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20';
+                conn.dataset.state = 'down';
+                $('conn-label').textContent = 'API offline';
             }
         }
 
-        // Initial Load
         loadFeed();
-        refreshConnectionBadge();
+        refreshConnection();
+        setInterval(refreshConnection, 30000);
     </script>
 </body>
 </html>

@@ -1,61 +1,44 @@
-# Vigilance-PK Design System Specifications
-**Project ID**: 17382771392857080164
-**Theme**: Vigilance Terminal (Futuristic Command Center)
+# Vigilance-PK Dashboard Design
 
-> **Status: aspirational, not implemented.** The shipped dashboard in
-> `lite-web/index.html` uses a different palette (background `#0A0E1A`, not
-> `#19120a`), a fixed two-panel layout rather than a 12-column fluid grid, and
-> no 1440px container. Treat this document as the target design, not a
-> description of the current UI. Reconcile the two before relying on it.
+Describes the dashboard as built in `lite-web/index.html` (ADR-026).
+The earlier "Vigilance Terminal" spec (amber/cyan command-centre look) was
+never built and has been retired.
 
-## 🎨 Color Palette
-The aesthetic is built on a "Deep Space" foundation to minimize eye strain.
+## Principles
+- **A tool for analysts, not a film prop.** Plain labels ("Sync now", "Latest reports"), sentence case, no fake terminal jargon.
+- **Readable.** 14px body text, nothing under 12px.
+- **No third-party requests.** No CDN scripts, icon fonts or web fonts. Icons are inline SVG.
+- **Severity owns the warm colours.** Red/orange/yellow mean severity only. The interactive accent is blue so the two never get confused.
+- **Never colour alone.** Severity is always written as a label too.
 
-| Token | Value | Role |
-| :--- | :--- | :--- |
-| **Primary (Amber)** | `#f59e0b` | Active interaction, warnings, primary CTAs |
-| **Secondary (Cyan)** | `#06b6d4` | Data visualization, telemetry, normal status |
-| **Danger (Red)** | `#ffb4ab` | Critical failures, high-threat alerts |
-| **Background** | `#19120a` | The digital "floor" |
-| **Surface** | `#19120a` | Primary containers and cards |
-| **Outline** | `#a08e7a` | Technical linework and borders |
+## Colour tokens
+Defined on `:root`. Dark is the default; light follows `prefers-color-scheme`.
 
-## Typography
-Dual-font approach balancing technical precision with readability.
+| Token | Dark | Light | Use |
+|---|---|---|---|
+| `--bg` | `#0f1216` | `#f5f6f8` | Page background |
+| `--surface` | `#161a20` | `#ffffff` | Cards, bars, dialogs |
+| `--surface-2` | `#1d232b` | `#f0f2f5` | Hover, user messages, notices |
+| `--border` | `#2a313b` | `#dce0e5` | All borders |
+| `--text` / `--text-2` / `--text-3` | `#e7e9ec` / `#aab2bd` / `#808a97` | `#15181c` / `#48505c` / `#687280` | Primary / secondary / meta text |
+| `--accent` | `#6ea8fe` | `#1d4ed8` | Primary buttons, focus ring |
+| `--critical` | `#f87171` | `#b91c1c` | Severity: critical |
+| `--high` | `#fb923c` | `#c2410c` | Severity: high |
+| `--medium` | `#facc15` | `#a16207` | Severity: medium |
+| `--low` | `#8b95a3` | `#5f6875` | Severity: low |
 
-| Typeface | Usage |
-| :--- | :--- |
-| **JetBrains Mono** | Headlines, data points, labels, and technical data |
-| **Inter** | Body copy and long-form descriptions |
+## Type
+- UI: the system font stack (`system-ui`, Segoe UI, Roboto, Noto Sans).
+- Urdu: Noto Nastaliq Urdu / Jameel Noori Nastaleeq if installed, otherwise Segoe UI. Line height 1.9 for Nastaliq.
+- Sizes: 16px headings in dialogs, 14px body and card titles, 13px secondary, 12px meta.
 
-### Type Scales
-- **Headline LG**: 32px / Bold / Monospace
-- **Headline MD**: 24px / Semi-Bold / Monospace
-- **Body LG**: 16px / Regular / Inter
-- **Label MD**: 12px / Medium / Monospace (0.05em spacing)
+## Layout
+- Top bar: name, connection state, Status, Sync now.
+- Two panels: report feed (320–440px) and chat. Below 860px they stack and the page scrolls.
+- Radius 8px everywhere; 1px borders; no shadows, blur or glow.
 
-## 📐 Spacing & Layout
-- **Baseline Unit**: 4px
-- **Margins**: 24px (Desktop)
-- **Gutters**: 16px
-- **Grid**: 12-column fluid grid
-- **Max Container**: 1440px
-
-## 💠 Component Specifications
-
-### Buttons
-- **Primary**: Amber background, Black text. Subtle amber outer glow (8px) on hover.
-- **Secondary**: Transparent, 1px Cyan border, Cyan text.
-- **Ghost**: No background, Muted Gray text, White on hover.
-
-### Cards & Modules
-- **Border**: 1px solid (`#a08e7a`).
-- **Radius**: Soft (0.25rem / 4px).
-- **Critical Status**: 2px thick top border in Amber or Red.
-
-### Data Chips
-- Small rectangular tags (`label-sm`). 
-- 10% opacity background of the status color with 100% opacity text.
-
----
-*Generated via Stitch MCP from the Vigilance-PK Pro Dashboard project.*
+## Components
+- **Report card:** severity pill + source + date; linked title; two-line summary; categories and tags; "Why this rating" disclosure. Left border in the severity colour.
+- **Notice:** inline message above the feed for sync progress, results and errors. Dismissible.
+- **Dialogs:** native `<dialog>` for status and the admin key (Esc closes, focus is managed by the browser).
+- **Answer:** escaped text with minimal Markdown (paragraphs, bullets, bold), followed by the list of reports searched.
