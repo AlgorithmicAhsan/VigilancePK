@@ -48,7 +48,9 @@ graph TD
 *   **Grounded Analyst Prompting**: Hardened system prompts and zero-temperature configurations to eliminate hallucinations.
 
 ### 📊 Dashboard
-*   **One self-contained file**: `lite-web/index.html`, plain HTML/CSS/JS. No build step, and no CDN scripts, icon libraries or web fonts: an analyst's browser makes no third-party requests.
+*   **Plain files, no build step**: `lite-web/` holds one HTML page, one stylesheet and three scripts. No CDN scripts, icon libraries or web fonts: an analyst's browser makes no third-party requests.
+*   **Sign-in with roles**: admins edit lists and manage users; reviewers read lists and review entries. Every page and API call needs a signed-in account.
+*   **Editable lists**: newspapers, RSS feeds, categories, sub-categories, keywords, news types, provinces and cities are edited in the dashboard (or imported from HRMS Excel exports), never in code.
 *   **Triage feed**: each report shows a severity label, source, date, HRCP categories and the classifier's reason for the rating. Titles link to the original article; Urdu renders right-to-left.
 *   **Streaming answers**: chat replies stream in as newline-delimited JSON, with progress messages.
 *   **Source citation**: every claim cites a source and date, and each answer lists the reports it searched.
@@ -61,10 +63,10 @@ graph TD
 | Layer | Technology |
 | :--- | :--- |
 | **Backend** | Python 3.11, FastAPI, Uvicorn |
-| **Frontend** | Plain HTML, CSS and JavaScript (single file, no dependencies) |
-| **Embeddings** | Sentence-Transformers (multilingual MiniLM) |
+| **Frontend** | Plain HTML, CSS and JavaScript (no build step, no dependencies) |
+| **Embeddings** | Gemini `gemini-embedding-001` (768 dimensions, no local model) |
 | **LLM** | Google Gemini (Flash) |
-| **Database** | Neon Postgres (accounts, editable lists, news entries); ChromaDB for chat search until its move to Neon |
+| **Database** | Neon Postgres + pgvector (articles and search, accounts, editable lists, news entries) |
 
 ---
 
@@ -85,7 +87,7 @@ pip install -r requirements-dev.txt
 
 # Configure Environment
 cp .env.example .env
-# Edit .env and set GOOGLE_API_KEY, DATABASE_URL and ADMIN_KEY (see comments in the file)
+# Edit .env and set GOOGLE_API_KEY, DATABASE_URL, ADMIN_KEY and SESSION_SECRET (see comments in the file)
 
 # Create the tables, then load the client's HRMS list exports
 python -m src.manage init-db
@@ -104,8 +106,19 @@ uvicorn src.api:app --reload --port 8000
 # Simply open 'lite-web/index.html' in any modern web browser.
 ```
 
-Press the sync button to pull new reports. The dashboard asks for the
-`ADMIN_KEY` once per tab. Each sync only classifies articles it has not seen;
+Sign in with an account created by `python -m src.manage create-user`.
+
+Syncs run on a schedule, not from the dashboard. Either run one in a terminal,
+with progress and per-stage timings on screen:
+```bash
+python -m src.manage sync
+```
+or point a cron job at the API:
+```bash
+curl -X POST -H "X-Admin-Key: $ADMIN_KEY" https://<your-api>/sync
+```
+Only one sync runs at a time, however it was started.
+Each sync only classifies articles it has not seen;
 any that fail are retried on the next sync.
 
 ### Tests
@@ -115,7 +128,7 @@ python -m pytest
 Unit tests run offline and never call Gemini.
 
 If you serve the dashboard from anywhere other than your own machine, set
-`API_BASE` at the top of the `<script>` block in `lite-web/index.html` to your
+`API_BASE` at the top of `lite-web/app.js` to your
 deployed API URL, and set `ALLOWED_ORIGINS` in `.env` to match.
 
 ---

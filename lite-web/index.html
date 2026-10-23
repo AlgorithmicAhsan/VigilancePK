@@ -5,283 +5,133 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vigilance-PK</title>
     <!--
-        Self-contained on purpose (ADR-026): no CDN scripts, icon libraries or
-        web fonts. Analysts' browsers make no third-party requests.
+        No build step and no third-party requests (ADR-026). Plain files,
+        loaded as classic scripts so the page also works opened from disk.
     -->
-    <style>
-        :root {
-            color-scheme: dark;
-            --bg: #0f1216;
-            --surface: #161a20;
-            --surface-2: #1d232b;
-            --border: #2a313b;
-            --text: #e7e9ec;
-            --text-2: #aab2bd;
-            --text-3: #808a97;
-            --accent: #6ea8fe;
-            --accent-text: #0b1220;
-            --focus: #6ea8fe;
-            --critical: #f87171;
-            --high: #fb923c;
-            --medium: #facc15;
-            --low: #8b95a3;
-            --error: #f87171;
-            --ok: #4ade80;
-            --radius: 8px;
-            --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
-            --font-urdu: "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Segoe UI", system-ui, sans-serif;
-        }
-        @media (prefers-color-scheme: light) {
-            :root {
-                color-scheme: light;
-                --bg: #f5f6f8;
-                --surface: #ffffff;
-                --surface-2: #f0f2f5;
-                --border: #dce0e5;
-                --text: #15181c;
-                --text-2: #48505c;
-                --text-3: #687280;
-                --accent: #1d4ed8;
-                --accent-text: #ffffff;
-                --focus: #1d4ed8;
-                --critical: #b91c1c;
-                --high: #c2410c;
-                --medium: #a16207;
-                --low: #5f6875;
-                --error: #b91c1c;
-                --ok: #15803d;
-            }
-        }
-
-        * { box-sizing: border-box; }
-        /* Components below set display, which would otherwise override the hidden attribute. */
-        [hidden] { display: none !important; }
-        html, body { height: 100%; }
-        body {
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            background: var(--bg);
-            color: var(--text);
-            font: 14px/1.5 var(--font);
-        }
-        h1, h2, h3, p { margin: 0; }
-        a { color: inherit; }
-        button, input { font: inherit; color: inherit; }
-        :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-        .sr-only {
-            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-            overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
-        }
-        .muted { color: var(--text-3); }
-
-        /* --- Buttons --- */
-        .btn {
-            display: inline-flex; align-items: center; gap: 6px;
-            height: 34px; padding: 0 14px;
-            border: 1px solid var(--border); border-radius: var(--radius);
-            background: var(--surface); cursor: pointer; white-space: nowrap;
-        }
-        .btn:hover:not(:disabled) { background: var(--surface-2); }
-        .btn:disabled { opacity: .6; cursor: default; }
-        .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
-        .btn-primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
-        .btn svg { width: 16px; height: 16px; flex: none; }
-        .spinning svg { animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @media (prefers-reduced-motion: reduce) { .spinning svg { animation: none; } }
-
-        /* --- Top bar --- */
-        .topbar {
-            display: flex; align-items: center; justify-content: space-between; gap: 16px;
-            padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--surface);
-        }
-        .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-        .brand svg { width: 22px; height: 22px; color: var(--accent); flex: none; }
-        .brand h1 { font-size: 16px; font-weight: 650; }
-        .brand p { font-size: 12px; color: var(--text-3); }
-        .actions { display: flex; align-items: center; gap: 8px; }
-        .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); margin-right: 4px; }
-        .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
-        .conn[data-state="ok"] .dot { background: var(--ok); }
-        .conn[data-state="down"] .dot { background: var(--error); }
-        .conn[data-state="down"] { color: var(--error); }
-
-        /* --- Layout --- */
-        .layout {
-            flex: 1; min-height: 0;
-            display: grid; grid-template-columns: minmax(320px, 440px) 1fr;
-        }
-        .panel { display: flex; flex-direction: column; min-height: 0; }
-        .feed { border-right: 1px solid var(--border); }
-        .panel-head {
-            display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-            padding: 14px 20px 10px;
-        }
-        .panel-head h2 { font-size: 14px; font-weight: 600; }
-        .panel-head span { font-size: 12px; }
-
-        /* --- Notices (sync progress / results / errors) --- */
-        .notice {
-            display: flex; align-items: flex-start; gap: 10px;
-            margin: 0 20px 10px; padding: 10px 12px;
-            border: 1px solid var(--border); border-radius: var(--radius);
-            background: var(--surface-2); font-size: 13px; color: var(--text-2);
-        }
-        .notice[data-kind="error"] { border-color: var(--error); color: var(--error); }
-        .notice p { flex: 1; }
-        .notice button { border: 0; background: none; cursor: pointer; color: var(--text-3); padding: 0 2px; }
-
-        /* --- Feed --- */
-        /* minmax(0, 1fr): a plain auto column grows to its widest line and overflows on phones. */
-        .feed-list { list-style: none; margin: 0; padding: 0 20px 20px; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; }
-        .report {
-            padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius);
-            background: var(--surface); border-left: 3px solid var(--sev, var(--low));
-        }
-        .report-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); margin-bottom: 6px; }
-        .sev {
-            font-weight: 600; color: var(--sev, var(--low));
-            padding: 1px 7px; border-radius: 99px;
-            background: color-mix(in srgb, var(--sev, var(--low)) 14%, transparent);
-        }
-        .sev-critical { --sev: var(--critical); }
-        .sev-high { --sev: var(--high); }
-        .sev-medium { --sev: var(--medium); }
-        .sev-low { --sev: var(--low); }
-        .report h3 { font-size: 14px; font-weight: 600; line-height: 1.4; }
-        .report h3 a { text-decoration: none; }
-        .report h3 a:hover { text-decoration: underline; }
-        .report .summary {
-            margin-top: 4px; color: var(--text-2); font-size: 13px;
-            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-        }
-        .report .labels { margin-top: 8px; font-size: 12px; color: var(--text-3); }
-        .report details { margin-top: 6px; font-size: 12px; color: var(--text-2); }
-        .report summary { cursor: pointer; color: var(--text-3); }
-        .report details p { margin-top: 4px; }
-        [lang="ur"] { font-family: var(--font-urdu); line-height: 1.9; }
-        .empty { padding: 40px 20px; text-align: center; color: var(--text-3); }
-
-        /* --- Chat --- */
-        .chat-log { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 20px 20px; }
-        .chat-inner { max-width: 760px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
-        .intro { padding: 24px 0; color: var(--text-2); }
-        .intro p { margin-bottom: 12px; }
-        .suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
-        .msg-user {
-            justify-self: end; max-width: 80%;
-            padding: 10px 14px; border-radius: var(--radius);
-            background: var(--surface-2); border: 1px solid var(--border);
-        }
-        .msg-bot { padding: 14px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
-        .msg-status { font-size: 13px; color: var(--text-3); }
-        .msg-body p + p, .msg-body p + ul, .msg-body ul + p { margin-top: 10px; }
-        .msg-body ul { margin: 8px 0 0; padding-left: 20px; }
-        .msg-body li + li { margin-top: 4px; }
-        .msg-error { margin-top: 8px; color: var(--error); font-size: 13px; }
-        .sources { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-3); }
-        .sources ol { margin: 4px 0 0; padding-left: 18px; }
-        .sources li { margin-top: 2px; }
-        .sources a { color: var(--text-2); }
-        .composer { display: flex; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--border); background: var(--surface); }
-        .composer-inner { display: flex; gap: 8px; width: 100%; max-width: 760px; margin: 0 auto; }
-        .composer input {
-            flex: 1; min-width: 0; height: 40px; padding: 0 12px;
-            border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg);
-        }
-        .composer .btn { height: 40px; }
-
-        /* --- Dialogs --- */
-        dialog {
-            width: min(440px, calc(100vw - 32px)); padding: 20px;
-            border: 1px solid var(--border); border-radius: 10px;
-            background: var(--surface); color: var(--text);
-        }
-        dialog::backdrop { background: rgb(0 0 0 / .5); }
-        dialog h2 { font-size: 16px; margin-bottom: 12px; }
-        dialog .help { color: var(--text-2); font-size: 13px; margin-bottom: 12px; }
-        dialog input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
-        dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-        dl.status { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 13px; }
-        dl.status dt { color: var(--text-3); }
-        dl.status dd { margin: 0; overflow-wrap: anywhere; }
-
-        /* --- Narrow screens: stack the panels and let the page scroll --- */
-        @media (max-width: 860px) {
-            body { height: auto; }
-            .layout { display: block; }
-            .feed { border-right: 0; border-bottom: 1px solid var(--border); }
-            .feed-list { max-height: 55vh; }
-            .chat-log { min-height: 50vh; }
-            .topbar { flex-wrap: wrap; padding: 12px 16px; }
-            .panel-head, .chat-log { padding-left: 16px; padding-right: 16px; }
-            .feed-list { padding: 0 16px 16px; }
-            .notice { margin: 0 16px 10px; }
-            .composer { padding: 12px 16px; }
-        }
-    </style>
+    <link rel="stylesheet" href="app.css">
 </head>
 <body>
-    <header class="topbar">
-        <div class="brand">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <div>
-                <h1>Vigilance-PK</h1>
-                <p>Human rights news triage for Pakistan</p>
+    <!-- ===== Sign-in ===== -->
+    <div id="login-view" class="login" hidden>
+        <form id="login-form" class="login-card">
+            <div class="brand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <div>
+                    <h1>Vigilance-PK</h1>
+                    <p>Sign in to continue</p>
+                </div>
             </div>
-        </div>
-        <div class="actions">
-            <span id="conn" class="conn" data-state="checking" role="status"><span class="dot"></span><span id="conn-label">Checking…</span></span>
-            <button id="status-btn" class="btn" type="button">Status</button>
-            <button id="sync-btn" class="btn btn-primary" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg>
-                <span id="sync-label">Sync now</span>
-            </button>
-        </div>
-    </header>
+            <div class="field">
+                <label for="login-username">Username</label>
+                <input id="login-username" class="input" autocomplete="username" required>
+            </div>
+            <div class="field">
+                <label for="login-password">Password</label>
+                <input id="login-password" class="input" type="password" autocomplete="current-password" required>
+            </div>
+            <p id="login-error" class="form-error" role="alert"></p>
+            <button id="login-btn" class="btn btn-primary" type="submit">Sign in</button>
+        </form>
+    </div>
 
-    <main class="layout">
-        <section class="panel feed" aria-labelledby="feed-title">
-            <div class="panel-head">
-                <h2 id="feed-title">Latest reports</h2>
-                <span id="feed-count" class="muted"></span>
+    <!-- ===== App ===== -->
+    <div id="app" class="app" hidden>
+        <header class="topbar">
+            <div class="brand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <div>
+                    <h1>Vigilance-PK</h1>
+                    <p>Human rights news triage for Pakistan</p>
+                </div>
             </div>
-            <div id="notice" class="notice" role="status" hidden>
-                <p id="notice-text"></p>
-                <button id="notice-close" type="button" aria-label="Dismiss">✕</button>
+            <nav class="nav" aria-label="Sections">
+                <a href="#reports" data-view="reports">Reports</a>
+                <a href="#lists" data-view="lists">Lists</a>
+            </nav>
+            <div class="actions">
+                <span id="conn" class="conn" data-state="checking" role="status"><span class="dot"></span><span id="conn-label">Checking…</span></span>
+                <button id="status-btn" class="btn btn-small" type="button">Status</button>
+                <span id="who" class="who"></span>
+                <button id="signout-btn" class="btn btn-small" type="button">Sign out</button>
             </div>
-            <ol id="feed-list" class="feed-list">
-                <li class="empty">Loading reports…</li>
-            </ol>
-        </section>
+        </header>
 
-        <section class="panel chat" aria-labelledby="chat-title">
-            <div class="panel-head">
-                <h2 id="chat-title">Ask the repository</h2>
-            </div>
-            <div id="chat-log" class="chat-log">
-                <div id="chat-inner" class="chat-inner" aria-live="polite">
-                    <div id="chat-intro" class="intro">
-                        <p>Answers use only the reports stored here, and cite the source of each claim.</p>
-                        <div class="suggestions">
-                            <button class="btn" type="button" data-q="Summarize recent reports of enforced disappearances">Enforced disappearances</button>
-                            <button class="btn" type="button" data-q="What violence against religious minorities has been reported recently?">Violence against minorities</button>
-                            <button class="btn" type="button" data-q="Are there reports of custodial torture or deaths in police custody?">Custodial torture</button>
+        <!-- Reports: feed + chat -->
+        <main id="view-reports" class="layout">
+            <section class="panel feed" aria-labelledby="feed-title">
+                <div class="panel-head">
+                    <h2 id="feed-title">Latest reports</h2>
+                    <span><span id="feed-count" class="muted"></span> <button id="feed-refresh" class="btn btn-small" type="button">Refresh</button></span>
+                </div>
+                <ol id="feed-list" class="feed-list">
+                    <li class="empty">Loading reports…</li>
+                </ol>
+            </section>
+
+            <section class="panel chat" aria-labelledby="chat-title">
+                <div class="panel-head">
+                    <h2 id="chat-title">Ask the repository</h2>
+                </div>
+                <div id="chat-log" class="chat-log">
+                    <div id="chat-inner" class="chat-inner" aria-live="polite">
+                        <div id="chat-intro" class="intro">
+                            <p>Answers use only the reports stored here, and cite the source of each claim.</p>
+                            <div class="suggestions">
+                                <button class="btn" type="button" data-q="Summarize recent reports of enforced disappearances">Enforced disappearances</button>
+                                <button class="btn" type="button" data-q="What violence against religious minorities has been reported recently?">Violence against minorities</button>
+                                <button class="btn" type="button" data-q="Are there reports of custodial torture or deaths in police custody?">Custodial torture</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <form id="chat-form" class="composer">
-                <div class="composer-inner">
-                    <label for="chat-input" class="sr-only">Your question</label>
-                    <input id="chat-input" type="text" maxlength="2000" autocomplete="off"
-                           placeholder="Ask about the reports, e.g. protests in Balochistan">
-                    <button id="send-btn" class="btn btn-primary" type="submit">Ask</button>
+                <form id="chat-form" class="composer">
+                    <div class="composer-inner">
+                        <label for="chat-input" class="sr-only">Your question</label>
+                        <input id="chat-input" class="input" type="text" maxlength="2000" autocomplete="off"
+                               placeholder="Ask about the reports, e.g. protests in Balochistan">
+                        <button id="send-btn" class="btn btn-primary" type="submit">Ask</button>
+                    </div>
+                </form>
+            </section>
+        </main>
+
+        <!-- Lists: everything the pipeline reads, editable without code -->
+        <main id="view-lists" class="lists" hidden>
+            <nav class="kinds" aria-label="Lists">
+                <h2>Lists</h2>
+                <div id="kind-nav"></div>
+            </nav>
+            <section class="list-main" aria-labelledby="list-title">
+                <div class="list-head">
+                    <div>
+                        <h2 id="list-title">Newspapers</h2>
+                        <p id="list-help"></p>
+                    </div>
+                    <div class="btns admin-only">
+                        <button id="import-btn" class="btn" type="button">Import HRMS Excel</button>
+                        <button id="add-btn" class="btn btn-primary" type="button">Add entry</button>
+                        <input id="import-file" type="file" accept=".xlsx" hidden>
+                    </div>
                 </div>
-            </form>
-        </section>
-    </main>
+                <div id="list-notice" class="notice" role="status" hidden>
+                    <div id="list-notice-text"></div>
+                    <button id="list-notice-close" type="button" aria-label="Dismiss">✕</button>
+                </div>
+                <div class="toolbar">
+                    <label for="list-search" class="sr-only">Search</label>
+                    <input id="list-search" class="input" type="search" placeholder="Search names">
+                    <label class="check"><input id="show-inactive" type="checkbox"> Show inactive</label>
+                    <span id="list-count" class="muted"></span>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead id="list-thead"></thead>
+                        <tbody id="list-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
 
     <dialog id="status-dialog" aria-labelledby="status-title">
         <h2 id="status-title">System status</h2>
@@ -289,387 +139,21 @@
         <form method="dialog" class="row"><button class="btn" type="submit">Close</button></form>
     </dialog>
 
-    <!-- /sync is admin-only (ADR-022) -->
-    <dialog id="key-dialog" aria-labelledby="key-title">
-        <form id="key-form">
-            <h2 id="key-title">Admin key required</h2>
-            <p class="help">Syncing fetches and classifies new reports. Enter the ADMIN_KEY set on the server. It is kept for this tab only.</p>
-            <label for="key-input" class="sr-only">Admin key</label>
-            <input id="key-input" type="password" autocomplete="current-password" required>
+    <dialog id="entry-dialog" aria-labelledby="entry-title">
+        <form id="entry-form">
+            <h2 id="entry-title">Edit entry</h2>
+            <div id="entry-fields"></div>
+            <label class="check"><input id="entry-active" type="checkbox"> Active (used by the pipeline)</label>
+            <p id="entry-error" class="form-error" role="alert"></p>
             <div class="row">
-                <button id="key-cancel" class="btn" type="button">Cancel</button>
-                <button class="btn btn-primary" type="submit">Start sync</button>
+                <button id="entry-cancel" class="btn" type="button">Cancel</button>
+                <button id="entry-save" class="btn btn-primary" type="submit">Save</button>
             </div>
         </form>
     </dialog>
 
-    <script>
-        // Single place to point the dashboard at its backend.
-        // Change this to your deployed API before publishing the page.
-        const API_BASE = 'http://localhost:8000';
-
-        const $ = (id) => document.getElementById(id);
-
-        // --- Untrusted-content helpers (ADR-010) -------------------------
-        // Everything in the feed and the answers originates in third-party
-        // RSS. Anything interpolated into HTML must go through esc();
-        // anything used as a URL must go through safeUrl().
-        function esc(value) {
-            return String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-
-        // Only http(s) survives. Blocks javascript:, data: and friends.
-        function safeUrl(value) {
-            const raw = String(value ?? '').trim();
-            if (!raw) return '';
-            try {
-                const url = new URL(raw, window.location.href);
-                return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
-            } catch (e) {
-                return '';
-            }
-        }
-
-        // "2026-10-20T08:15:00+00:00" -> "20 Oct"
-        function shortDate(iso) {
-            const d = iso ? new Date(iso) : null;
-            if (!d || isNaN(d)) return 'Undated';
-            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-        }
-
-        function timeAgo(iso) {
-            const d = iso ? new Date(iso) : null;
-            if (!d || isNaN(d)) return '';
-            const mins = Math.round((Date.now() - d) / 60000);
-            if (mins < 1) return 'just now';
-            if (mins < 60) return `${mins} min ago`;
-            const hours = Math.round(mins / 60);
-            return hours < 24 ? `${hours} h ago` : d.toLocaleString('en-GB');
-        }
-
-        // Minimal Markdown for answers: paragraphs, bullet lists, **bold**,
-        // headings shown as bold lines. The text is escaped FIRST, so the
-        // only markup that can appear is the markup added here.
-        function renderAnswer(text) {
-            const inline = (s) => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-            let html = '', inList = false;
-            for (const line of esc(text).split('\n')) {
-                const item = line.match(/^\s*[*-]\s+(.*)$/);
-                if (item) {
-                    if (!inList) { html += '<ul>'; inList = true; }
-                    html += `<li>${inline(item[1])}</li>`;
-                    continue;
-                }
-                if (inList) { html += '</ul>'; inList = false; }
-                const heading = line.match(/^#{1,4}\s+(.*)$/);
-                if (heading) html += `<p><strong>${inline(heading[1])}</strong></p>`;
-                else if (line.trim()) html += `<p>${inline(line)}</p>`;
-            }
-            return inList ? html + '</ul>' : html;
-        }
-
-        // --- Notices -----------------------------------------------------
-        function showNotice(text, kind = 'info') {
-            $('notice-text').textContent = text;
-            $('notice').dataset.kind = kind;
-            $('notice').hidden = false;
-        }
-        function hideNotice() { $('notice').hidden = true; }
-        $('notice-close').addEventListener('click', hideNotice);
-
-        // --- Feed --------------------------------------------------------
-        const SEVERITY_LABEL = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
-
-        function reportHtml(item) {
-            const doc = String(item.document || '');
-            const lines = doc.split('\n');
-            const meta = item.metadatas || {};
-            const severity = SEVERITY_LABEL[meta.severity] ? meta.severity : 'low';
-            const lang = meta.language === 'urdu' ? ' lang="ur"' : '';
-            const href = safeUrl(meta.link);
-            const title = esc(lines[0]);
-            const summary = esc(lines.slice(1).join(' ').trim());
-            const tags = String(meta.specific_tags || '').split(',').filter(Boolean).join(', ');
-            const labels = [meta.category, tags].filter(Boolean).map(esc).join(' · ');
-            const reasoning = esc(meta.reasoning || '');
-
-            return `
-                <li class="report sev-${severity}">
-                    <div class="report-meta">
-                        <span class="sev">${SEVERITY_LABEL[severity]}</span>
-                        <span>${esc(meta.source || 'Unknown source')}</span>
-                        <span aria-hidden="true">·</span>
-                        <time datetime="${esc(meta.published || '')}">${esc(shortDate(meta.published))}</time>
-                    </div>
-                    <h3 dir="auto"${lang}>${href
-                        ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${title}</a>`
-                        : title}</h3>
-                    ${summary ? `<p class="summary" dir="auto"${lang}>${summary}</p>` : ''}
-                    ${labels ? `<p class="labels">${labels}</p>` : ''}
-                    ${reasoning ? `<details><summary>Why this rating</summary><p>${reasoning}</p></details>` : ''}
-                </li>`;
-        }
-
-        async function loadFeed() {
-            const list = $('feed-list');
-            try {
-                const res = await fetch(`${API_BASE}/feed?limit=40`);
-                if (!res.ok) throw new Error(`API returned ${res.status}`);
-                const data = await res.json();
-                if (Array.isArray(data) && data.length > 0) {
-                    list.innerHTML = data.map(reportHtml).join('');
-                    $('feed-count').textContent = `${data.length} most recent`;
-                } else {
-                    list.innerHTML = '<li class="empty">No reports yet. Run a sync to fetch the latest news.</li>';
-                    $('feed-count').textContent = '';
-                }
-            } catch (err) {
-                list.innerHTML = `<li class="empty">Couldn't load reports: ${esc(err.message)}</li>`;
-                $('feed-count').textContent = '';
-            }
-        }
-
-        // --- Chat --------------------------------------------------------
-        let chatBusy = false;
-
-        function sourcesHtml(sources) {
-            if (!sources.length) return '';
-            const items = sources.map(s => {
-                const href = safeUrl(s.link);
-                const label = `${esc(s.source || 'Unknown')}, ${esc(shortDate(s.published))}`;
-                const title = esc(s.title || '');
-                return `<li>${label}: ${href
-                    ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer" dir="auto">${title}</a>`
-                    : `<span dir="auto">${title}</span>`}</li>`;
-            }).join('');
-            return `<div class="sources">Reports searched<ol>${items}</ol></div>`;
-        }
-
-        async function ask(query) {
-            if (chatBusy || !query) return;
-            chatBusy = true;
-            $('send-btn').disabled = true;
-            $('chat-intro')?.remove();
-
-            const log = $('chat-log');
-            const inner = $('chat-inner');
-            const userMsg = document.createElement('div');
-            userMsg.className = 'msg-user';
-            userMsg.dir = 'auto';
-            userMsg.textContent = query;
-            const bot = document.createElement('div');
-            bot.className = 'msg-bot';
-            bot.innerHTML = '<p class="msg-status">Searching reports…</p><div class="msg-body"></div><div class="msg-extra"></div>';
-            inner.append(userMsg, bot);
-            log.scrollTop = log.scrollHeight;
-
-            const status = bot.querySelector('.msg-status');
-            const body = bot.querySelector('.msg-body');
-            const extra = bot.querySelector('.msg-extra');
-            let answer = '', sources = [], buffer = '';
-
-            try {
-                const res = await fetch(`${API_BASE}/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query }),
-                });
-                if (!res.ok) {
-                    const problem = await res.json().catch(() => ({}));
-                    throw new Error(typeof problem.detail === 'string' ? problem.detail : `API returned ${res.status}`);
-                }
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop();
-                    for (const line of lines) {
-                        if (!line.trim()) continue;
-                        let msg;
-                        try { msg = JSON.parse(line); } catch (e) { continue; }
-                        if (msg.type === 'status') status.textContent = msg.data;
-                        if (msg.type === 'sources') sources = Array.isArray(msg.data) ? msg.data : [];
-                        if (msg.type === 'content') {
-                            answer += msg.data;
-                            status.hidden = true;
-                            body.innerHTML = renderAnswer(answer);
-                            log.scrollTop = log.scrollHeight;
-                        }
-                        if (msg.type === 'error') {
-                            status.hidden = true;
-                            extra.insertAdjacentHTML('beforeend', `<p class="msg-error">${esc(msg.data)}</p>`);
-                        }
-                    }
-                }
-                if (answer) extra.insertAdjacentHTML('beforeend', sourcesHtml(sources));
-            } catch (err) {
-                status.hidden = true;
-                extra.innerHTML = `<p class="msg-error">Couldn't get an answer: ${esc(err.message)}</p>`;
-            } finally {
-                chatBusy = false;
-                $('send-btn').disabled = false;
-                log.scrollTop = log.scrollHeight;
-            }
-        }
-
-        $('chat-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const input = $('chat-input');
-            const query = input.value.trim();
-            if (!query || chatBusy) return;
-            input.value = '';
-            ask(query);
-        });
-        document.querySelectorAll('[data-q]').forEach(btn =>
-            btn.addEventListener('click', () => ask(btn.dataset.q)));
-
-        // --- Sync (ADR-022) ----------------------------------------------
-        // The admin key lives in sessionStorage: forgotten when the tab
-        // closes, never baked into the page source.
-        const ADMIN_KEY_STORAGE = 'vigilance-admin-key';
-        let syncTimer = null;
-        let isSyncing = false;
-
-        function getAdminKey() {
-            try { return sessionStorage.getItem(ADMIN_KEY_STORAGE) || ''; } catch (e) { return ''; }
-        }
-        function setAdminKey(key) {
-            try {
-                if (key) sessionStorage.setItem(ADMIN_KEY_STORAGE, key);
-                else sessionStorage.removeItem(ADMIN_KEY_STORAGE);
-            } catch (e) { /* storage blocked: the user is asked again next time */ }
-        }
-
-        $('sync-btn').addEventListener('click', () => {
-            if (isSyncing) return;
-            const key = getAdminKey();
-            if (key) startSync(key); else $('key-dialog').showModal();
-        });
-        $('key-cancel').addEventListener('click', () => $('key-dialog').close());
-        $('key-dialog').addEventListener('close', () => { $('key-input').value = ''; });
-        $('key-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const key = $('key-input').value.trim();
-            if (!key) return;
-            setAdminKey(key);
-            $('key-dialog').close();
-            startSync(key);
-        });
-
-        function setSyncing(active) {
-            isSyncing = active;
-            $('sync-btn').disabled = active;
-            $('sync-btn').classList.toggle('spinning', active);
-            $('sync-label').textContent = active ? 'Syncing…' : 'Sync now';
-            if (!active && syncTimer) { clearInterval(syncTimer); syncTimer = null; }
-        }
-
-        async function startSync(key) {
-            setSyncing(true);
-            showNotice('Sync running: fetching feeds and classifying new reports. This can take a few minutes.');
-            try {
-                const res = await fetch(`${API_BASE}/sync`, { method: 'POST', headers: { 'X-Admin-Key': key } });
-                if (res.status === 401) {
-                    setAdminKey('');
-                    throw new Error('the admin key was rejected.');
-                }
-                // 409 means a run is already going: follow that one instead.
-                if (!res.ok && res.status !== 409) {
-                    const problem = await res.json().catch(() => ({}));
-                    throw new Error(problem.detail || `API returned ${res.status}`);
-                }
-                followSync();
-            } catch (err) {
-                setSyncing(false);
-                showNotice(`Sync failed: ${err.message}`, 'error');
-            }
-        }
-
-        // Polls the server's own record of the run rather than guessing.
-        function followSync() {
-            let misses = 0;
-            syncTimer = setInterval(async () => {
-                try {
-                    const res = await fetch(`${API_BASE}/sync/status`);
-                    if (!res.ok) throw new Error(`API returned ${res.status}`);
-                    const state = await res.json();
-                    misses = 0;
-                    if (state.running) return;
-
-                    setSyncing(false);
-                    await loadFeed();
-                    if (state.error) {
-                        showNotice(state.error, 'error');
-                    } else if (state.result) {
-                        const r = state.result;
-                        const failed = r.failed ? ` ${r.failed} failed and will be retried next sync.` : '';
-                        showNotice(`Sync finished: ${r.new} new of ${r.fetched} fetched, ${r.classified} classified.${failed}`,
-                                   r.failed ? 'error' : 'info');
-                    }
-                } catch (err) {
-                    if (++misses >= 3) {
-                        setSyncing(false);
-                        showNotice(`Lost contact with the API during sync: ${err.message}`, 'error');
-                    }
-                }
-            }, 5000);
-        }
-
-        // --- Status ------------------------------------------------------
-        // Every value is measured or read from the API (ADR-013).
-        $('status-btn').addEventListener('click', async () => {
-            const rows = [];
-            const started = performance.now();
-            try {
-                const res = await fetch(`${API_BASE}/stats`);
-                const latency = Math.round(performance.now() - started);
-                if (!res.ok) throw new Error(`API returned ${res.status}`);
-                const stats = await res.json();
-                rows.push(['API', `Reachable (${latency} ms)`]);
-                rows.push(['Reports stored', stats.total_logs]);
-                rows.push(['Chat model', stats.engine]);
-                rows.push(['Gemini key', stats.gemini_key_configured ? 'Configured' : 'Missing']);
-                const sync = await fetch(`${API_BASE}/sync/status`).then(r => r.ok ? r.json() : null).catch(() => null);
-                if (sync?.running) rows.push(['Last sync', 'Running now']);
-                else if (sync?.finished_at) {
-                    const r = sync.result;
-                    rows.push(['Last sync', sync.error ? `Failed ${timeAgo(sync.finished_at)}`
-                        : `${timeAgo(sync.finished_at)}: ${r?.new ?? 0} new, ${r?.failed ?? 0} failed`]);
-                } else rows.push(['Last sync', 'None since the server started']);
-            } catch (err) {
-                rows.push(['API', `Unreachable after ${Math.round(performance.now() - started)} ms`]);
-                rows.push(['Detail', err.message]);
-            }
-            rows.push(['Endpoint', API_BASE]);
-            $('status-list').innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
-            $('status-dialog').showModal();
-        });
-
-        // The connection indicator reflects a real reachability check.
-        async function refreshConnection() {
-            const conn = $('conn');
-            try {
-                const res = await fetch(`${API_BASE}/stats`);
-                if (!res.ok) throw new Error();
-                conn.dataset.state = 'ok';
-                $('conn-label').textContent = 'Connected';
-            } catch (e) {
-                conn.dataset.state = 'down';
-                $('conn-label').textContent = 'API offline';
-            }
-        }
-
-        loadFeed();
-        refreshConnection();
-        setInterval(refreshConnection, 30000);
-    </script>
+    <script src="app.js"></script>
+    <script src="reports.js"></script>
+    <script src="lists.js"></script>
 </body>
 </html>

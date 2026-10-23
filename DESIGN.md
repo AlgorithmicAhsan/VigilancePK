@@ -33,12 +33,15 @@ Defined on `:root`. Dark is the default; light follows `prefers-color-scheme`.
 - Sizes: 16px headings in dialogs, 14px body and card titles, 13px secondary, 12px meta.
 
 ## Layout
-- Top bar: name, connection state, Status, Sync now.
-- Two panels: report feed (320–440px) and chat. Below 860px they stack and the page scrolls.
+- Sign-in: one centred card. Nothing else is shown until signed in.
+- Top bar: name, Reports / Lists navigation, connection state, Status, the signed-in user, Sign out. No sync button: syncs run on a schedule.
+- Reports: two panels, report feed (320–440px) and chat. Below 860px they stack and the page scrolls.
+- Lists: a list picker (220px, with active / total counts) and the selected list as a table. Below 860px the picker becomes a horizontal strip above the table.
 - Radius 8px everywhere; 1px borders; no shadows, blur or glow.
 
 ## Components
 - **Report card:** severity pill + source + date; linked title; two-line summary; categories and tags; "Why this rating" disclosure. Left border in the severity colour.
 - **Notice:** inline message above the feed for sync progress, results and errors. Dismissible.
-- **Dialogs:** native `<dialog>` for status and the admin key (Esc closes, focus is managed by the browser).
+- **Dialogs:** native `<dialog>` for status and for adding or editing a list entry (Esc closes, focus is managed by the browser).
+- **List table:** name, the columns that kind uses, an Active / Inactive pill and, for admins only, an Edit button. Inactive rows are hidden unless "Show inactive" is ticked.
 - **Answer:** escaped text with minimal Markdown (paragraphs, bullets, bold), followed by the list of reports searched.
