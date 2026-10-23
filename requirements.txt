@@ -17,7 +17,12 @@ feedparser==6.0.12
 # --- LLM: classification + chat (src/llm.py) ---
 google-genai==2.3.0
 
-# --- Vault: embeddings + vector store ---
+# --- Database: Neon Postgres ---
+psycopg[binary,pool]==3.3.6
+# Reads the client's HRMS Excel list exports.
+openpyxl==3.1.5
+
+# --- Vault: embeddings + vector store (until chat search moves to Neon) ---
 chromadb==1.5.5
 sentence-transformers==5.2.3
 # Pinned below 5.x: transformers 5.3.0 crashes the interpreter (access

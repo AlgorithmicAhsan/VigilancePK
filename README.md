@@ -64,8 +64,7 @@ graph TD
 | **Frontend** | Plain HTML, CSS and JavaScript (single file, no dependencies) |
 | **Embeddings** | Sentence-Transformers (multilingual MiniLM) |
 | **LLM** | Google Gemini (Flash) |
-| **Database** | ChromaDB (Vector Database) |
-| **Evaluation** | DeepEval (RAG Faithfulness & Relevancy) |
+| **Database** | Neon Postgres (accounts, editable lists, news entries); ChromaDB for chat search until its move to Neon |
 
 ---
 
@@ -73,19 +72,27 @@ graph TD
 
 ### 1. Prerequisites
 - Python 3.11+
-- Google Gemini API Key (Optional, for cloud-based inference)
+- Google Gemini API key
+- A Neon Postgres database (free tier is enough)
 
 ### 2. Environment Setup
 ```bash
 # Install runtime dependencies
 pip install -r requirements.txt
 
-# Or, for development (adds pytest + deepeval)
+# Or, for development (adds pytest)
 pip install -r requirements-dev.txt
 
 # Configure Environment
 cp .env.example .env
-# Edit .env and set GOOGLE_API_KEY and ADMIN_KEY (see comments in the file)
+# Edit .env and set GOOGLE_API_KEY, DATABASE_URL and ADMIN_KEY (see comments in the file)
+
+# Create the tables, then load the client's HRMS list exports
+python -m src.manage init-db
+python -m src.manage import-lists path/to/HRMS_*.xlsx
+
+# Create the first dashboard account (password is typed at a prompt)
+python -m src.manage create-user <username> --role admin
 ```
 
 ### 3. Execution
@@ -110,13 +117,6 @@ Unit tests run offline and never call Gemini.
 If you serve the dashboard from anywhere other than your own machine, set
 `API_BASE` at the top of the `<script>` block in `lite-web/index.html` to your
 deployed API URL, and set `ALLOWED_ORIGINS` in `.env` to match.
-
-### 4. Intelligence Audit
-RAG quality is scored with DeepEval. The test suite is not yet in the
-repository (see ADR-009); once added it runs with:
-```bash
-deepeval test run tests/test_eval_rag.py
-```
 
 ---
 
