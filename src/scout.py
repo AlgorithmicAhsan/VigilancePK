@@ -1,7 +1,6 @@
 import email.utils
 import feedparser
 import html
-import json
 import re
 import socket
 from datetime import datetime, timezone
@@ -146,15 +145,3 @@ class NewsScraper:
         self.fetch_feeds()
         self.filter_articles()
         return self.filtered_data
-
-    def save_to_file(self, filename="data/filtered_news.json"):
-        """Saves the filtered and processed data to the data folder."""
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(self.filtered_data, f, ensure_ascii=False, indent=4)
-        print(f"Saved {len(self.filtered_data)} articles to {filename}")
-
-if __name__ == "__main__":
-    scraper = NewsScraper()
-    scraper.fetch_feeds()
-    scraper.filter_articles()
-    scraper.save_to_file()

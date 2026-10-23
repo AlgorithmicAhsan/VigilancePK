@@ -215,3 +215,13 @@ news_db/
 __pycache__/
 .env
 venv/
+# --- Kept locally, never pushed ---
+# Internal decision log, planning and client-facing documents.
+DECISIONS.md
+ALIGNMENT.md
+SRS_*
+*.docx
+*.pdf
+~$*
+temp.txt
+scratch/

@@ -192,33 +192,3 @@ class Jurist:
             failed += bad
             print(f"Classified {start + len(batch)}/{len(articles)} ({len(failed)} failed so far)")
         return classified, failed
-
-    def process_all(self, input_file=None, output_file=None):
-        """Classifies a JSON file of articles and writes the successes."""
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if input_file is None:
-            input_file = os.path.join(base_dir, "data", "filtered_news.json")
-        if output_file is None:
-            output_file = os.path.join(base_dir, "data", "categorized_news.json")
-
-        if not os.path.exists(input_file):
-            print(f"Error: {input_file} not found.")
-            return
-
-        with open(input_file, "r", encoding="utf-8") as f:
-            articles = json.load(f)
-
-        print(f"Analyzing {len(articles)} articles in batches of {self.batch_size} using {self.model}...")
-        classified, failed = self.classify_all(articles)
-
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(classified, f, ensure_ascii=False, indent=4)
-
-        print(f"Saved {len(classified)} classified articles to {output_file} ({len(failed)} failed, not saved).")
-
-
-if __name__ == "__main__":
-    # Model comes from CLASSIFY_MODEL in .env.
-    jurist = Jurist()
-    print(f"Classifying with: {jurist.model}")
-    jurist.process_all()

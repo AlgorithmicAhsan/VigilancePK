@@ -2,3 +2,5 @@
 /*.json
 /*.csv
 /chroma_db/
+# Client-supplied lists and schemas - never committed.
+/client/
