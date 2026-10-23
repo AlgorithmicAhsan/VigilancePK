@@ -64,3 +64,44 @@ def test_rejects_unknown_files(tmp_path):
 ])
 def test_default_frequency(name, expected):
     assert default_frequency(name) == expected
+
+
+# --- dashboard validation ---------------------------------------------------
+
+from src.lookups import clean_lookup
+
+
+def test_clean_keeps_only_fields_the_kind_uses():
+    out = clean_lookup("keyword", {"name": " storms ", "hrms_id": "334", "url": "http://x", "language": "Urdu"})
+    assert out["name"] == "storms" and out["hrms_id"] == 334
+    assert out["url"] is None and out["language"] is None and out["active"] is True
+
+
+def test_feed_needs_newspaper_and_http_url():
+    with pytest.raises(ValueError, match="Parent"):
+        clean_lookup("feed", {"name": "Dawn home", "url": "https://dawn.com/feed"})
+    with pytest.raises(ValueError, match="http"):
+        clean_lookup("feed", {"name": "Dawn home", "parent": "Dawn", "url": "javascript:alert(1)"})
+    ok = clean_lookup("feed", {"name": "Dawn home", "parent": "Dawn", "url": "https://www.dawn.com/feeds/home"})
+    assert ok["parent"] == "Dawn"
+
+
+@pytest.mark.parametrize("data, message", [
+    ({"name": ""}, "Name is required"),
+    ({"name": "x" * 301}, "too long"),
+    ({"name": "a", "hrms_id": "abc"}, "whole number"),
+    ({"name": "a", "hrms_id": "-4"}, "positive"),
+])
+def test_bad_input_is_rejected(data, message):
+    with pytest.raises(ValueError, match=message):
+        clean_lookup("category", data)
+
+
+def test_unknown_kind_is_rejected():
+    with pytest.raises(ValueError, match="Unknown"):
+        clean_lookup("users", {"name": "x"})
+
+
+def test_partial_update_touches_only_given_fields():
+    assert clean_lookup("newspaper", {"active": False}, partial=True) == {"active": False}
+    assert clean_lookup("newspaper", {"frequency": "Weekly"}, partial=True) == {"frequency": "Weekly"}
