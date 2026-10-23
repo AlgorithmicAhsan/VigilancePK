@@ -131,3 +131,17 @@ def test_classify_all_sends_one_request_per_batch(monkeypatch):
 
     assert len(calls) == 3  # 20 + 20 + 5
     assert len(classified) == 45 and failed == []
+
+
+def test_concurrent_batches_keep_input_order(monkeypatch):
+    import time
+
+    def slow_first(prompt, *a, **k):
+        if "Title 0" in prompt:
+            time.sleep(0.05)  # first batch finishes last
+        return _reply(*(_item(i) for i in range(prompt.count("[id="))))
+
+    monkeypatch.setattr(jurist_module.llm, "generate_json", slow_first)
+    classified, _ = Jurist(model="test", batch_size=2).classify_all(_articles(6), concurrency=3)
+    assert [a["title"] for a in classified] == [f"Title {i}" for i in range(6)]
+    assert all(a["classified_by"] == "test" for a in classified)

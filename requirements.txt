@@ -2,9 +2,8 @@
 # Only packages the application actually imports. Transitive deps resolve
 # automatically. Dev/test tooling lives in requirements-dev.txt.
 #
-# NOTE: torch is deliberately NOT pinned here. It arrives via
-# sentence-transformers (until ADR-005 lands), and pinning a local CUDA build
-# (e.g. 2.9.0+cu126) makes this file uninstallable from PyPI.
+# No torch and no local models: embeddings come from Gemini and vectors
+# live in Neon (ADR-033), so the backend fits a small free-tier server.
 
 # --- API layer ---
 fastapi==0.135.2
@@ -21,14 +20,3 @@ google-genai==2.3.0
 psycopg[binary,pool]==3.3.6
 # Reads the client's HRMS Excel list exports.
 openpyxl==3.1.5
-
-# --- Vault: embeddings + vector store (until chat search moves to Neon) ---
-chromadb==1.5.5
-sentence-transformers==5.2.3
-# Pinned below 5.x: transformers 5.3.0 crashes the interpreter (access
-# violation in core_model_loading._materialize_copy -> torch.storage) while
-# loading the embedding model. Verify with a clean install before relaxing.
-transformers>=4.41,<5
-
-# --- Shared ---
-tqdm==4.67.3

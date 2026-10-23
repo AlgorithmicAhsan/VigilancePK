@@ -77,3 +77,28 @@ CREATE TABLE IF NOT EXISTS news_entries (
     exported_at  timestamptz
 );
 CREATE INDEX IF NOT EXISTS news_entries_status_date ON news_entries (status, news_date DESC);
+
+-- Chatbot store (ADR-033): every classified story with its Gemini embedding.
+-- Search uses cosine distance by name (<=>), so the metric can never drift
+-- the way the old Chroma collection silently fell back to L2.
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE IF NOT EXISTS articles (
+    id            uuid PRIMARY KEY,                -- uuid5 of the link
+    link          text NOT NULL UNIQUE,
+    source        text NOT NULL,
+    language      text NOT NULL,
+    title         text NOT NULL,
+    summary       text NOT NULL DEFAULT '',
+    published_at  timestamptz,                     -- NULL = undated, never faked (ADR-015)
+    fetched_at    timestamptz NOT NULL DEFAULT now(),
+    categories    text[] NOT NULL DEFAULT '{}',
+    tags          text[] NOT NULL DEFAULT '{}',
+    severity      text NOT NULL CHECK (severity IN ('critical', 'high', 'medium', 'low')),
+    reasoning     text NOT NULL DEFAULT '',
+    classified_by text NOT NULL,                   -- model that rated it, for re-rating later
+    embedding     vector(768)                      -- NULL until the embed step reaches it (ADR-036)
+);
+-- Tables created before ADR-036 required an embedding up front.
+ALTER TABLE articles ALTER COLUMN embedding DROP NOT NULL;
+CREATE INDEX IF NOT EXISTS articles_published ON articles (published_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS articles_embedding ON articles USING hnsw (embedding vector_cosine_ops);

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
@@ -7,7 +7,6 @@ import json
 import os
 import secrets
 import threading
-import uuid
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
@@ -15,9 +14,9 @@ from pydantic import BaseModel
 load_dotenv()
 
 from src import llm
+from src.admin_api import router as admin_router, current_user
 from src.vault import Vault
-from src.scout import NewsScraper
-from src.jurist import Jurist
+from src.pipeline import run_sync, SyncBusy
 
 # Longest query we accept on /chat. Stops an open endpoint being used as an
 # unmetered relay to the upstream model.
@@ -29,6 +28,7 @@ NO_DATA_REPLY = "I do not have specific data on this topic in the current intell
 ADMIN_KEY = os.getenv("ADMIN_KEY", "")
 
 app = FastAPI(title="Vigilance-PK Intel API")
+app.include_router(admin_router)
 
 # --- CORS ---
 # Comma-separated list, e.g. ALLOWED_ORIGINS="https://vigilance.vercel.app"
@@ -45,8 +45,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Singleton Models ---
-# Loaded once at startup so the embedding model is not re-read per request.
+# Neon-backed store; nothing to load at startup (ADR-033).
 vault = Vault()
 
 # --- Sync state (ADR-022) ---
@@ -61,65 +60,21 @@ def _now():
 
 
 @app.get("/feed")
-async def get_feed(limit: int = 15):
-    """Returns the LATEST 'Ground Truth' documents."""
+def get_feed(limit: int = 15, user: dict = Depends(current_user)):
+    """The newest stories, sorted by the database (ADR-033)."""
     try:
-        # Chroma cannot sort inside get(), so we pull and sort in Python.
-        # Embeddings are excluded to keep the payload small.
-        news = vault.collection.get(include=["documents", "metadatas"])
-        ids = news.get("ids") or []
-        documents = news.get("documents") or []
-        metadatas = news.get("metadatas") or []
-
-        results = []
-        for i in range(len(ids)):
-            results.append({
-                "id": ids[i],
-                "document": documents[i] if i < len(documents) else "",
-                "metadatas": metadatas[i] if i < len(metadatas) else {},
-            })
-
-        # Sort by published date (Descending)
-        results.sort(key=lambda x: (x["metadatas"] or {}).get("published", ""), reverse=True)
-        return results[:limit]
+        return vault.latest(min(max(limit, 1), 200))
     except Exception as e:
         print(f"ERROR: /feed failed: {e}")
         raise HTTPException(status_code=500, detail="Could not read the intelligence repository.")
 
 
 def run_pipeline(wipe: bool):
-    """Scout -> Jurist -> Vault. Runs in a background thread."""
+    """Runs the shared sync (src/pipeline.py) in a background thread."""
     try:
-        if wipe:
-            print("WIPING_VAULT: Purging old records for fresh sync...")
-            vault.reset_collection()
-
-        # 1. Scout
-        raw_news = NewsScraper().scrape_all()
-
-        # 2. Incremental filter: skip what we already have. Failures are never
-        # stored, so they are not in this set and get retried automatically.
-        # include=[] means ids only - documents and metadata are not needed here.
-        known_ids = set(vault.collection.get(include=[])['ids'])
-        new_articles = [
-            art for art in raw_news
-            if str(uuid.uuid5(uuid.NAMESPACE_URL, art.get('link', ''))) not in known_ids
-        ]
-        print(f"Incremental Sync: {len(new_articles)} new articles identified (Skipped {len(raw_news) - len(new_articles)} existing).")
-
-        # 3. Jurist (Triage), in batches
-        classified, failed = Jurist().classify_all(new_articles)
-
-        # 4. Vault (Ingest). Failures are never stored (ADR-019).
-        vault.ingest_news(classified)
-
-        sync_state["result"] = {
-            "fetched": len(raw_news),
-            "new": len(new_articles),
-            "classified": len(classified),
-            "failed": len(failed),
-        }
-        print(f"PIPELINE_COMPLETE: {sync_state['result']}")
+        sync_state["result"] = run_sync(wipe)
+    except SyncBusy as e:
+        sync_state["error"] = str(e)
     except Exception as e:
         print(f"ERROR: pipeline failed: {e}")
         sync_state["error"] = "Sync failed. See server logs for details."
@@ -150,18 +105,19 @@ async def sync_intel(
 
 
 @app.get("/sync/status")
-async def sync_status():
+async def sync_status(user: dict = Depends(current_user)):
     """Lets the UI follow a run instead of guessing from card counts."""
     return sync_state
 
 
 @app.get("/stats")
-async def get_stats():
+def get_stats(user: dict = Depends(current_user)):
     """Returns intelligence repository statistics."""
     try:
-        count = vault.collection.count()
+        count = vault.count()
         return {
             "total_logs": count,
+            "not_yet_searchable": vault.pending_embeddings(),
             "status": "OPERATIONAL",
             "engine": llm.CHAT_MODEL,
             "gemini_key_configured": llm.key_configured(),
@@ -197,7 +153,7 @@ CHAT_RULES = (
 
 
 @app.post("/chat")
-async def chat_endpoint(body: ChatRequest):
+async def chat_endpoint(body: ChatRequest, user: dict = Depends(current_user)):
     """RAG Chat with Streaming Response."""
     user_query = body.query.strip()
 
@@ -215,32 +171,26 @@ async def chat_endpoint(body: ChatRequest):
         # full LLM round trip per question for no retrieval gain (ADR-021).
         yield json.dumps({"type": "status", "data": "Searching reports…"}) + "\n"
         try:
-            search_results = await run_in_threadpool(vault.search_news, user_query, 5)
+            search_results = await run_in_threadpool(vault.search, user_query, 5)
 
             context_parts = []
             sources = []
 
             for r in search_results:
-                if not isinstance(r, dict):
-                    continue
-
-                doc = r.get('document', '')
-                meta = r.get('metadata') or {}
-
-                if doc:
-                    # Each note carries its own source and date (ADR-025).
-                    # Bare text left the model guessing who said what, and
-                    # it cited photo credits like "AFP/File" as sources.
-                    published = (meta.get('published') or '')[:10] or 'undated'
-                    context_parts.append(
-                        f"[Note {len(context_parts) + 1}] Source: {meta.get('source', 'Unknown')} | Published: {published}\n{doc}"
-                    )
-                    sources.append({
-                        "source": meta.get('source', 'Unknown'),
-                        "title": str(doc).splitlines()[0][:200],
-                        "published": meta.get('published', ''),
-                        "link": meta.get('link', '')
-                    })
+                # Each note carries its own source and date (ADR-025).
+                # Bare text left the model guessing who said what, and
+                # it cited photo credits like "AFP/File" as sources.
+                published = r["published_at"].date().isoformat() if r["published_at"] else "undated"
+                context_parts.append(
+                    f"[Note {len(context_parts) + 1}] Source: {r['source']} | Published: {published}\n"
+                    f"{r['title']}\n\n{r['summary']}"
+                )
+                sources.append({
+                    "source": r["source"],
+                    "title": r["title"][:200],
+                    "published": r["published_at"].isoformat() if r["published_at"] else "",
+                    "link": r["link"],
+                })
 
             context = "\n---\n".join(context_parts) if context_parts else "No relevant documents found."
         except Exception as e:

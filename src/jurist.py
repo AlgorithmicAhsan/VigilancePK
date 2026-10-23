@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
 from pydantic import BaseModel
 from src import llm
@@ -9,6 +10,9 @@ from src import llm
 # free-tier quota on the first sync; 20 per call cuts requests ~20x and sends
 # the taxonomy once per batch instead of once per article.
 BATCH_SIZE = int(os.getenv("CLASSIFY_BATCH_SIZE", "20"))
+# Batches in flight at once (ADR-034). Three keeps well under per-minute
+# quotas; the SDK backs off and retries if a 429 still comes back.
+CONCURRENCY = int(os.getenv("CLASSIFY_CONCURRENCY", "3"))
 
 # Summaries are capped so one long article cannot crowd a batch prompt.
 SUMMARY_CHARS = 600
@@ -178,17 +182,17 @@ class Jurist:
             art["category"] = result["major_categories"][0]
             art["tags"] = ",".join(result["specific_tags"])
             art["severity"] = result["severity"]
+            art["classified_by"] = self.model
             classified.append(art)
         return classified, failed
 
-    def classify_all(self, articles):
-        """Sequential batches: one request at a time stays inside the
-        per-minute quota, and the SDK backs off if we still hit it."""
+    def classify_all(self, articles, concurrency=CONCURRENCY):
+        """Runs up to `concurrency` batches at once. Results keep input order."""
+        batches = [articles[i:i + self.batch_size] for i in range(0, len(articles), self.batch_size)]
         classified, failed = [], []
-        for start in range(0, len(articles), self.batch_size):
-            batch = articles[start:start + self.batch_size]
-            ok, bad = self.classify_batch(batch)
-            classified += ok
-            failed += bad
-            print(f"Classified {start + len(batch)}/{len(articles)} ({len(failed)} failed so far)")
+        with ThreadPoolExecutor(max_workers=max(1, concurrency)) as pool:
+            for done, (ok, bad) in enumerate(pool.map(self.classify_batch, batches), 1):
+                classified += ok
+                failed += bad
+                print(f"Classified batch {done}/{len(batches)} ({len(failed)} failed so far)")
         return classified, failed

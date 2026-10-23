@@ -42,3 +42,21 @@ def test_filter_uses_whole_words():
         "Court matched the FIR to the CCTV record",
         "کرکٹ میچ",  # Urdu is never keyword-filtered
     ]
+
+
+def test_one_failing_feed_does_not_stop_the_others(monkeypatch):
+    import types
+    from src import scout
+
+    def fake_parse(url, agent=None):
+        if "broken" in url:
+            raise OSError("timed out")
+        entry = {"title": f"Story from {url}", "summary": "", "link": url + "/1", "published": "Mon, 20 Oct 2026 10:00:00 +0500"}
+        return types.SimpleNamespace(bozo=False, entries=[entry])
+
+    monkeypatch.setattr(scout.feedparser, "parse", fake_parse)
+    scraper = NewsScraper()
+    scraper.sources = {"A": "https://a.example", "Broken": "https://broken.example", "C": "https://c.example"}
+    scraper.fetch_feeds()
+    assert [a["source"] for a in scraper.data] == ["A", "C"]  # source order kept
+    assert scraper.data[0]["published"] == "2026-10-20T05:00:00+00:00"  # stored in UTC

@@ -3,6 +3,7 @@ import feedparser
 import html
 import re
 import socket
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 # Seconds to wait on a single feed before giving up. feedparser has no timeout
@@ -47,66 +48,59 @@ class NewsScraper:
         self.data = []
         self.filtered_data = []
 
+    def fetch_one(self, name: str, url: str) -> list[dict]:
+        """Reads one feed. A failing feed returns nothing; it never stops the others."""
+        try:
+            feed = feedparser.parse(url, agent=USER_AGENT)
+        except Exception as e:
+            print(f"WARNING: could not fetch {name}: {e}")
+            return []
+        if getattr(feed, "bozo", False) and not feed.entries:
+            print(f"WARNING: {name} returned no usable entries ({getattr(feed, 'bozo_exception', 'unknown error')}).")
+            return []
+
+        articles = []
+        fetched_at = datetime.now(timezone.utc).isoformat()
+        for entry in feed.entries:
+            # Normalize published date to a timezone-aware ISO string in UTC.
+            raw_date = entry.get("published", "") or entry.get("updated", "")
+            published_iso = ""
+            if raw_date:
+                try:
+                    dt = email.utils.parsedate_to_datetime(raw_date)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    published_iso = dt.astimezone(timezone.utc).isoformat()
+                except (TypeError, ValueError) as e:
+                    # Leave it empty rather than substituting "now": a
+                    # fabricated timestamp sorts undated items to the top
+                    # of the feed as if they were breaking news.
+                    print(f"DEBUG: unparseable date from {name}: {raw_date!r} ({e})")
+
+            title = clean_text(entry.get("title", ""))
+            summary = clean_text(entry.get("summary", ""))
+            articles.append({
+                "source": name,
+                "title": title,
+                "link": entry.get("link", ""),
+                "published": published_iso,
+                "summary": summary,
+                "language": "urdu" if is_urdu(title) or is_urdu(summary) else "english",
+                "fetched_at": fetched_at,
+            })
+        return articles
+
     def fetch_feeds(self):
-        """Fetches, parses, and processes all defined RSS feeds."""
+        """Reads every feed at the same time (ADR-034). Waiting on six sites
+        one after another made the slowest-site wait add up six times."""
         # Reset so a second call on the same instance does not double-count.
         self.data = []
         socket.setdefaulttimeout(FEED_TIMEOUT_SECONDS)
-
-        for name, url in self.sources.items():
-            print(f"Fetching from {name}...")
-            try:
-                feed = feedparser.parse(url, agent=USER_AGENT)
-            except Exception as e:
-                print(f"WARNING: could not fetch {name}: {e}")
-                continue
-
-            if getattr(feed, "bozo", False) and not feed.entries:
-                print(f"WARNING: {name} returned no usable entries ({getattr(feed, 'bozo_exception', 'unknown error')}).")
-                continue
-
-            for entry in feed.entries:
-                # Normalize published date to a timezone-aware ISO string.
-                # Mixing aware and naive values here breaks the string sort
-                # that /feed relies on, so everything is coerced to UTC.
-                raw_date = entry.get("published", "") or entry.get("updated", "")
-                published_iso = ""
-                if raw_date:
-                    try:
-                        dt = email.utils.parsedate_to_datetime(raw_date)
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
-                        published_iso = dt.astimezone(timezone.utc).isoformat()
-                    except (TypeError, ValueError) as e:
-                        # Leave it empty rather than substituting "now": a
-                        # fabricated timestamp sorts undated items to the top
-                        # of the feed as if they were breaking news.
-                        print(f"DEBUG: unparseable date from {name}: {raw_date!r} ({e})")
-
-                # Try to extract image URL
-                image_url = ""
-                if hasattr(entry, 'media_content') and entry.media_content:
-                    image_url = entry.media_content[0].get('url', '')
-                elif hasattr(entry, 'links'):
-                    for link in entry.links:
-                        if 'image' in link.get('type', ''):
-                            image_url = link.get('href', '')
-                            break
-
-                title = clean_text(entry.get("title", ""))
-                summary = clean_text(entry.get("summary", ""))
-                self.data.append({
-                    "source": name,
-                    "title": title,
-                    "link": entry.get("link", ""),
-                    "published": published_iso,
-                    "summary": summary,
-                    "image": image_url,
-                    "language": "urdu" if is_urdu(title) or is_urdu(summary) else "english",
-                    "fetched_at": datetime.now(timezone.utc).isoformat()
-                })
-        
-        print(f"Total articles fetched: {len(self.data)}")
+        with ThreadPoolExecutor(max_workers=max(1, len(self.sources))) as pool:
+            results = pool.map(lambda item: self.fetch_one(*item), self.sources.items())
+            for articles in results:  # map keeps the source order
+                self.data.extend(articles)
+        print(f"[fetch] {len(self.data)} stories from {len(self.sources)} feeds")
 
     # Whole-word matching only. Plain substring matching silently discarded
     # real reports: "score" hit "Scores of protesters killed", "match" hit
@@ -138,7 +132,7 @@ class NewsScraper:
             if not self.EXCLUDE_PATTERN.search(text):
                 self.filtered_data.append(article)
         
-        print(f"Milestone reached: Kept {len(self.filtered_data)} articles for the next phase.")
+        print(f"[fetch] {len(self.filtered_data)} kept after the sports/entertainment/weather filter")
 
     def scrape_all(self):
         """One-call method to fetch, filter and return news."""

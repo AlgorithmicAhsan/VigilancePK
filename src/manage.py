@@ -5,6 +5,7 @@
     python -m src.manage create-user <username> --role admin
     python -m src.manage list-users
     python -m src.manage list-models
+    python -m src.manage sync [--wipe]
 """
 import argparse
 import getpass
@@ -61,6 +62,14 @@ def cmd_list_models(args):
             print(model.name)
 
 
+def cmd_sync(args):
+    from src.pipeline import SyncBusy, run_sync
+    try:
+        run_sync(wipe=args.wipe)
+    except SyncBusy as e:
+        sys.exit(str(e))
+
+
 def main():
     parser = argparse.ArgumentParser(prog="python -m src.manage")
     sub = parser.add_subparsers(required=True)
@@ -74,6 +83,9 @@ def main():
     p.set_defaults(func=cmd_create_user)
     sub.add_parser("list-users").set_defaults(func=cmd_list_users)
     sub.add_parser("list-models", help="list Gemini models this key can use").set_defaults(func=cmd_list_models)
+    p = sub.add_parser("sync", help="fetch, classify and store new stories, with logs on screen")
+    p.add_argument("--wipe", action="store_true", help="delete all stored articles first")
+    p.set_defaults(func=cmd_sync)
     args = parser.parse_args()
     args.func(args)
 
